@@ -74,10 +74,10 @@ class ModelPredictiveControl:
                 cost += cvxpy.quad_form(x_ref[:, t] - x[:, t], self.Q_)
 
             V = self.getVelocitiesFromRobotModels(
-                front_steer=x_predicted_full_info[t][6],
-                front_speed=x_predicted_full_info[t][7],
-                rear_steer=x_predicted_full_info[t][8],
-                rear_speed=x_predicted_full_info[t][9]
+                front_steer=u[1, t],
+                front_speed=u[0, t],
+                rear_steer=u[3, t],
+                rear_speed=u[2, t]
             )
             constraints += [x[0, t + 1] == x[0, t] + V[0] * math.cos(x[2, t]) * self.DT_ - V[1] * math.sin(x[2, t]) * self.DT_]
             constraints += [x[1, t + 1] == x[1, t] + V[0] * math.sin(x[2, t]) * self.DT_ + V[1] * math.cos(x[2, t]) * self.DT_]
