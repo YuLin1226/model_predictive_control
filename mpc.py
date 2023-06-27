@@ -11,11 +11,18 @@ import pathlib
 
 class State:
 
-    def __init__(self, x, y, yaw) -> None:
+    def __init__(self, x, y, yaw, vx, vy, w, front_steer, front_speed, rear_steer, rear_speed) -> None:
         
         self.x_ = x
         self.y_ = y
         self.yaw_ = yaw
+        self.vx_ = vx
+        self.vy_ = vy
+        self.w_ = w
+        self.front_steer_ = front_steer
+        self.front_speed_ = front_speed
+        self.rear_steer_ = rear_steer
+        self.rear_speed_ = rear_speed
 
 
 class ModelPredictiveControl:
@@ -38,13 +45,21 @@ class ModelPredictiveControl:
         self.isModelParameterRetrived_ = False
         self.wheel_base_ = 0.0
 
+        self.x_ref_in_np_ = np.zeros((self.NX_, self.HL_ + 1))
+        self.x_ref_full_info_ = []
+        # full info includes:
+        # - pose (x, y, yaw)
+        # - twist (vx, vy, w)
+        # - wheel_info (front & rear -- steer & speed)
+        # - time_stamp
+
     def start(self):
         
         if not self.isModelParameterRetrived_:
             print("Error: Model Parameters haven't been retrived.")
             return False
 
-    def controlLaw(self, x_ref, x_first, x_predicted):
+    def controlLaw(self, x_ref, x_first, x_predicted_full_info):
 
         x = cvxpy.Variable((self.NX_, self.HL_ + 1))
         u = cvxpy.Variable((self.NU_, self.HL_))
@@ -58,8 +73,12 @@ class ModelPredictiveControl:
             if t != 0:
                 cost += cvxpy.quad_form(x_ref[:, t] - x[:, t], self.Q_)
 
-
-            V = self.getVelocitiesFromRobotModels()
+            V = self.getVelocitiesFromRobotModels(
+                front_steer=x_predicted_full_info[t][6],
+                front_speed=x_predicted_full_info[t][7],
+                rear_steer=x_predicted_full_info[t][8],
+                rear_speed=x_predicted_full_info[t][9]
+            )
             constraints += [x[0, t + 1] == x[0, t] + V[0] * math.cos(x[2, t]) * self.DT_ - V[1] * math.sin(x[2, t]) * self.DT_]
             constraints += [x[1, t + 1] == x[1, t] + V[0] * math.sin(x[2, t]) * self.DT_ + V[1] * math.cos(x[2, t]) * self.DT_]
             constraints += [x[2, t + 1] == x[2, t] + V[2] * self.DT_]
@@ -93,20 +112,25 @@ class ModelPredictiveControl:
         return optimized_x, optimized_y, optimized_v, optimized_yaw, optimized_a, optimized_delta
         
 
-    def updateState(self, front_steer:float, front_speed:float, rear_steer:float, rear_speed:float, last_state:State):
+    def updateState(self, last_state:State) -> State:
         
         V = self.getVelocitiesFromRobotModels(
-            front_steer=front_steer, 
-            front_speed=front_speed, 
-            rear_steer=rear_steer, 
-            rear_speed=rear_speed)
+            front_steer=last_state.front_steer_, 
+            front_speed=last_state.front_speed_, 
+            rear_steer=last_state.rear_steer_, 
+            rear_speed=last_state.rear_speed_
+        )
         
         x = last_state.x_ + V[0] * math.cos(last_state.yaw_) * self.DT_ - V[1] * math.sin(last_state.yaw_) * self.DT_
         y = last_state.y_ + V[0] * math.sin(last_state.yaw_) * self.DT_ + V[1] * math.cos(last_state.yaw_) * self.DT_
         yaw = last_state.yaw_ + V[2] * self.DT_
         
-        return State(x=x, y=y, yaw=yaw)
-
+        return State(x=x, y=y, yaw=yaw, vx=V[0], vy=V[1], w=V[2], 
+                     front_steer=last_state.front_steer_, 
+                     front_speed=last_state.front_speed_, 
+                     rear_steer=last_state.rear_steer_, 
+                     rear_speed=last_state.rear_speed_
+                    )
 
     def getVelocitiesFromRobotModels(self, front_steer, front_speed, rear_steer, rear_speed):
 
@@ -138,7 +162,7 @@ class ModelPredictiveControl:
         self.isModelParameterRetrived_ = True
         self.wheel_base_ = wheel_base
 
-    def predictMotion(self, x_first, front_steer, front_speed, rear_steer, rear_speed, x_ref):
+    def predictMotion(self, x_current:State, x_ref_full_info):
         
         """
         x_predicted is a list, containing
@@ -152,24 +176,44 @@ class ModelPredictiveControl:
         This list will be used in "getVelocitiesFromRobotModels" in "controlLaw".
         """
 
-        x_predicted = x_ref * 0.0
-        for i, _ in enumerate(x_first):
-            x_predicted[i, 0] = x_first[i]
+        x_predicted_full_info = []
+        x_predicted_full_info.append([
+            x_current.x_,
+            x_current.y_,
+            x_current.yaw_,
+            x_current.vx_,
+            x_current.vy_,
+            x_current.front_steer_,
+            x_current.front_speed_,
+            x_current.rear_steer_,
+            x_current.rear_speed_
+        ])
 
-
+        state = State(
+            x=x_current.x_, 
+            y=x_current.y_, 
+            yaw=x_current.yaw_,
+            vx=x_current.vx_,
+            vy=x_current.vy_,
+            front_steer=x_current.front_steer_,
+            front_speed=x_current.front_speed_,
+            rear_steer=x_current.rear_steer_,
+            rear_speed=x_current.rear_speed_
+        )
         for i in range(self.HL_):
-            state = self.updateState()
-            x_predicted[0, i] = 
+            # we should use "optimized_result" to update state.
+            state = self.updateState(last_state=state)
+            x_predicted_full_info.append([
+            state.x_,
+            state.y_,
+            state.yaw_,
+            state.vx_,
+            state.vy_,
+            state.front_steer_,
+            state.front_speed_,
+            state.rear_steer_,
+            state.rear_speed_
+        ])
 
-
-
-        state = State(x=x0[0], y=x0[1], yaw=x0[3], v=x0[2])
-        for (ai, di, i) in zip(oa, od, range(1, T + 1)):
-            state = update_state(state, ai, di)
-            xbar[0, i] = state.x
-            xbar[1, i] = state.y
-            xbar[2, i] = state.v
-            xbar[3, i] = state.yaw
-
-        return xbar
+        return x_predicted_full_info
 
