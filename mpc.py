@@ -98,10 +98,10 @@ class ModelPredictiveControl:
         prob.solve(solver=cvxpy.ECOS, verbose=False)
 
         if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
-            optimized_x = np.array(x.value[0, :]).flatten()
-            optimized_y = np.array(x.value[1, :]).flatten()
-            optimized_v = np.array(x.value[2, :]).flatten()
-            optimized_yaw = np.array(x.value[3, :]).flatten()
+            optimized_x = np.array(x.value[0, :]).flatten() # this is only used in Plotting.
+            optimized_y = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
+            optimized_yaw = np.array(x.value[3, :]).flatten() # this is only used in Plotting.
+            optimized_v = np.array(x.value[2, :]).flatten() 
             optimized_a = np.array(u.value[0, :]).flatten()
             optimized_delta = np.array(u.value[0, :]).flatten()
 
