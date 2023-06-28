@@ -71,11 +71,26 @@ class ModelPredictiveControl:
         if not self.isModelParameterRetrived_:
             print("Error: Model Parameters haven't been retrived.")
             return False
+        
+        if not self.isReferenceRetrived_:
+            print("Error: Reference hasn't been retrived.")
+            return False
+        
+        for i in range(self.MAX_ITERATION_):
 
-    def controlLaw(self, x_ref, x_first, x_predicted_full_info):
+            
+            x_current = self.getCurrentState()
+            x_ref = self.getReferenceTrajectoryWithinHorizon(x_current=x_current)
+
+            opt_x, opt_y, opt_yaw, opt_front_speed, opt_front_steer, opt_rear_speed, opt_rear_steer = self.controlLaw(
+                x_ref=x_ref,
+                x_first=x_current
+            )
+
+    def controlLaw(self, x_ref, x_current):
         """
         x_ref: np.arrary with size (self.NX_, self.HL_ + 1)
-        x_first: np.arrary with size (self.NX_, 1)
+        x_current: np.arrary with size (self.NX_, 1)
         """
 
 
