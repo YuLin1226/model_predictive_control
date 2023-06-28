@@ -128,7 +128,6 @@ class ModelPredictiveControl:
 
         return optimized_x, optimized_y, optimized_yaw, optimized_front_speed, optimized_front_steer, optimized_rear_speed, optimized_rear_steer
         
-
     def updateState(self, last_state:State) -> State:
         
         V = self.getVelocitiesFromRobotModels(
@@ -197,6 +196,22 @@ class ModelPredictiveControl:
 
         self.isReferenceRetrived_ = True
         self.reference_ = node_lists
+    
+    def getReferenceTrajectoryWithinHorizon(self, idx):
+
+        if not self.isReferenceRetrived_:
+            return None
+        
+        x_ref = np.zeros((self.NX_, self.HL_ + 1))
+        
+        for i in range(self.HL_ + 1):
+            node = self.reference_[idx + i]
+            x_ref[0, i] = node[0]
+            x_ref[1, i] = node[1]
+            x_ref[2, i] = node[2]
+
+        return x_ref
+        
     # def predictMotion(self, x_current:State, x_ref_full_info):
         
     #     """
