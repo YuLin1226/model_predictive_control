@@ -60,6 +60,11 @@ class ModelPredictiveControl:
             return False
 
     def controlLaw(self, x_ref, x_first, x_predicted_full_info):
+        """
+        x_ref: np.arrary with size (self.NX_, self.HL_ + 1)
+        x_first: np.arrary with size (self.NX_, 1)
+        """
+
 
         x = cvxpy.Variable((self.NX_, self.HL_ + 1))
         u = cvxpy.Variable((self.NU_, self.HL_))
@@ -73,6 +78,7 @@ class ModelPredictiveControl:
             if t != 0:
                 cost += cvxpy.quad_form(x_ref[:, t] - x[:, t], self.Q_)
 
+            # Update State
             V = self.getVelocitiesFromRobotModels(
                 front_steer=u[1, t],
                 front_speed=u[0, t],
@@ -101,15 +107,22 @@ class ModelPredictiveControl:
             optimized_x = np.array(x.value[0, :]).flatten() # this is only used in Plotting.
             optimized_y = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
             optimized_yaw = np.array(x.value[3, :]).flatten() # this is only used in Plotting.
-            optimized_v = np.array(x.value[2, :]).flatten() 
-            optimized_a = np.array(u.value[0, :]).flatten()
-            optimized_delta = np.array(u.value[0, :]).flatten()
+            optimized_front_speed = np.array(u.value[0, :]).flatten()
+            optimized_front_steer = np.array(u.value[1, :]).flatten()
+            optimized_rear_speed = np.array(u.value[2, :]).flatten()
+            optimized_rear_steer = np.array(u.value[3, :]).flatten()
 
         else:
             print("Error: Cannot solve mpc..")
-            optimized_x, optimized_y, optimized_v, optimized_yaw, optimized_a, optimized_delta = None, None, None, None, None, None
+            optimized_x = None
+            optimized_y = None
+            optimized_yaw = None
+            optimized_front_speed = None
+            optimized_front_steer = None
+            optimized_rear_speed = None
+            optimized_rear_steer = None
 
-        return optimized_x, optimized_y, optimized_v, optimized_yaw, optimized_a, optimized_delta
+        return optimized_x, optimized_y, optimized_yaw, optimized_front_speed, optimized_front_steer, optimized_rear_speed, optimized_rear_steer
         
 
     def updateState(self, last_state:State) -> State:
@@ -130,7 +143,7 @@ class ModelPredictiveControl:
                      front_speed=last_state.front_speed_, 
                      rear_steer=last_state.rear_steer_, 
                      rear_speed=last_state.rear_speed_
-                    )
+                )
 
     def getVelocitiesFromRobotModels(self, front_steer, front_speed, rear_steer, rear_speed):
 
@@ -162,58 +175,58 @@ class ModelPredictiveControl:
         self.isModelParameterRetrived_ = True
         self.wheel_base_ = wheel_base
 
-    def predictMotion(self, x_current:State, x_ref_full_info):
+    # def predictMotion(self, x_current:State, x_ref_full_info):
         
-        """
-        x_predicted is a list, containing
-        - x
-        - y
-        - yaw
-        - vx
-        - vy
-        - w
+    #     """
+    #     x_predicted is a list, containing
+    #     - x
+    #     - y
+    #     - yaw
+    #     - vx
+    #     - vy
+    #     - w
         
-        This list will be used in "getVelocitiesFromRobotModels" in "controlLaw".
-        """
+    #     This list will be used in "getVelocitiesFromRobotModels" in "controlLaw".
+    #     """
 
-        x_predicted_full_info = []
-        x_predicted_full_info.append([
-            x_current.x_,
-            x_current.y_,
-            x_current.yaw_,
-            x_current.vx_,
-            x_current.vy_,
-            x_current.front_steer_,
-            x_current.front_speed_,
-            x_current.rear_steer_,
-            x_current.rear_speed_
-        ])
+    #     x_predicted_full_info = []
+    #     x_predicted_full_info.append([
+    #         x_current.x_,
+    #         x_current.y_,
+    #         x_current.yaw_,
+    #         x_current.vx_,
+    #         x_current.vy_,
+    #         x_current.front_steer_,
+    #         x_current.front_speed_,
+    #         x_current.rear_steer_,
+    #         x_current.rear_speed_
+    #     ])
 
-        state = State(
-            x=x_current.x_, 
-            y=x_current.y_, 
-            yaw=x_current.yaw_,
-            vx=x_current.vx_,
-            vy=x_current.vy_,
-            front_steer=x_current.front_steer_,
-            front_speed=x_current.front_speed_,
-            rear_steer=x_current.rear_steer_,
-            rear_speed=x_current.rear_speed_
-        )
-        for i in range(self.HL_):
-            # we should use "optimized_result" to update state.
-            state = self.updateState(last_state=state)
-            x_predicted_full_info.append([
-            state.x_,
-            state.y_,
-            state.yaw_,
-            state.vx_,
-            state.vy_,
-            state.front_steer_,
-            state.front_speed_,
-            state.rear_steer_,
-            state.rear_speed_
-        ])
+    #     state = State(
+    #         x=x_current.x_, 
+    #         y=x_current.y_, 
+    #         yaw=x_current.yaw_,
+    #         vx=x_current.vx_,
+    #         vy=x_current.vy_,
+    #         front_steer=x_current.front_steer_,
+    #         front_speed=x_current.front_speed_,
+    #         rear_steer=x_current.rear_steer_,
+    #         rear_speed=x_current.rear_speed_
+    #     )
+    #     for i in range(self.HL_):
+    #         # we should use "optimized_result" to update state.
+    #         state = self.updateState(last_state=state)
+    #         x_predicted_full_info.append([
+    #         state.x_,
+    #         state.y_,
+    #         state.yaw_,
+    #         state.vx_,
+    #         state.vy_,
+    #         state.front_steer_,
+    #         state.front_speed_,
+    #         state.rear_steer_,
+    #         state.rear_speed_
+    #     ])
 
-        return x_predicted_full_info
+    #     return x_predicted_full_info
 
