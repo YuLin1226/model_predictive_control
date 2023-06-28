@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import cvxpy
 import math
 import numpy as np
+import csv
 import sys
 import pathlib
 
@@ -44,6 +45,9 @@ class ModelPredictiveControl:
 
         self.isModelParameterRetrived_ = False
         self.wheel_base_ = 0.0
+
+        self.isReferenceRetrived_ = False
+        self.reference_ = None
 
         self.x_ref_in_np_ = np.zeros((self.NX_, self.HL_ + 1))
         self.x_ref_full_info_ = []
@@ -175,6 +179,24 @@ class ModelPredictiveControl:
         self.isModelParameterRetrived_ = True
         self.wheel_base_ = wheel_base
 
+    def retriveReferenceFromCSV(self, file_name):
+        
+        node_lists = []
+
+        with open(file_name, newline='') as csvfile:
+            rows = csv.reader(csvfile)
+            n = 0
+            for row in rows:
+                if n == 0:
+                    n += 1
+                    continue
+
+                node_lists.append(row)
+            # Node List Info:
+            # x | y | yaw | vx | vy | w | front_wheel: angle | front_wheel: speed | rear_wheel: angle | rear_wheel: speed  | time_stamp
+
+        self.isReferenceRetrived_ = True
+        self.reference_ = node_lists
     # def predictMotion(self, x_current:State, x_ref_full_info):
         
     #     """
