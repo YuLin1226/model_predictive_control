@@ -57,6 +57,15 @@ class ModelPredictiveControl:
         # - wheel_info (front & rear -- steer & speed)
         # - time_stamp
 
+
+    def initialization(self, wheel_base, file_name):
+
+        self.setRobotModelParameters(wheel_base=wheel_base)
+        self.retriveReferenceFromCSV(file_name=file_name)
+
+
+
+
     def start(self):
         
         if not self.isModelParameterRetrived_:
@@ -100,7 +109,7 @@ class ModelPredictiveControl:
 
         cost += cvxpy.quad_form(x_ref[:, self.HL_] - x[:, self.HL_], self.Qf_)
 
-        constraints += [x[:, 0] == x_first]
+        constraints += [x[:, 0] == x_current]
         constraints += [cvxpy.abs(u[0, :]) <= self.MAX_TRAVEL_SPEED_]
         constraints += [cvxpy.abs(u[2, :]) <= self.MAX_TRAVEL_SPEED_]
 
@@ -197,7 +206,11 @@ class ModelPredictiveControl:
         self.isReferenceRetrived_ = True
         self.reference_ = node_lists
     
-    def getReferenceTrajectoryWithinHorizon(self, idx):
+    def getReferenceTrajectoryWithinHorizon(self, x_current):
+
+        # Reference to teb_local_planner - find preview path.
+
+
 
         if not self.isReferenceRetrived_:
             return None
@@ -212,6 +225,11 @@ class ModelPredictiveControl:
 
         return x_ref
         
+    def getCurrentState(self):
+        x_current = np.zeros((self.NX_, 1))
+        # Using TF to update x_current
+        return x_current
+    
     # def predictMotion(self, x_current:State, x_ref_full_info):
         
     #     """
