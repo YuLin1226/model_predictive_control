@@ -309,3 +309,15 @@ class ModelPredictiveControl:
 
     #     return x_predicted_full_info
 
+
+
+if __name__ == '__main__' :
+
+    MPC = ModelPredictiveControl()
+    MPC.initialization(
+        wheel_base=1,
+        file_name="reference.csv"
+    )
+    MPC.start()
+    # print(MPC.reference_[0])
+
