@@ -180,7 +180,7 @@ class ModelPredictiveControl:
             return None
         
         H = np.array([
-            [1, 0, 0]
+            [1, 0, 0],
             [0, 1, self.wheel_base_/2],
             [1, 0, 0],
             [0, 1, -self.wheel_base_/2]
