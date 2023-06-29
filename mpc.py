@@ -36,8 +36,8 @@ class ModelPredictiveControl:
 
         self.R_ = np.diag([0.01, 0.01, 0.01, 0.01])
         self.Rd_ = np.diag([0.001, 0.001, 0.001, 0.001])
-        self.Q_ = np.diag([0.01, 0.01, 0.01, 0.01])
-        self.Qf_ = np.diag([0.001, 0.001, 0.001, 0.001])
+        self.Q_ = np.diag([0.01, 0.01, 0.01])
+        self.Qf_ = np.diag([0.001, 0.001, 0.001])
 
         self.MAX_TRAVEL_SPEED_ = 0.5
         self.MAX_STEER_SPEED_ = 0.5
@@ -45,6 +45,7 @@ class ModelPredictiveControl:
 
         self.isModelParameterRetrived_ = False
         self.wheel_base_ = 0.0
+        self.kinematical_matrix_ = None
 
         self.isReferenceRetrived_ = False
         self.reference_ = None
@@ -58,14 +59,10 @@ class ModelPredictiveControl:
         # - wheel_info (front & rear -- steer & speed)
         # - time_stamp
 
-
     def initialization(self, wheel_base, file_name):
 
         self.setRobotModelParameters(wheel_base=wheel_base)
         self.retriveReferenceFromCSV(file_name=file_name)
-
-
-
 
     def start(self):
         
@@ -76,17 +73,26 @@ class ModelPredictiveControl:
         if not self.isReferenceRetrived_:
             print("Error: Reference hasn't been retrived.")
             return False
-        
-        for i in range(self.MAX_ITERATION_):
-
             
-            x_current = self.getCurrentState()
-            x_ref = self.getReferenceTrajectoryWithinHorizon(x_current=x_current)
+        x_current = self.getCurrentState()
+        x_ref = self.getReferenceTrajectoryWithinHorizon(x_current=x_current)
 
-            opt_x, opt_y, opt_yaw, opt_front_speed, opt_front_steer, opt_rear_speed, opt_rear_steer = self.controlLaw(
-                x_ref=x_ref,
-                x_first=x_current
-            )
+        opt_x, opt_y, opt_yaw, opt_front_speed, opt_front_steer, opt_rear_speed, opt_rear_steer = self.controlLaw(
+            x_ref=x_ref,
+            x_current=x_current
+        )
+
+        print("Optimized Front Speed : %f" %opt_front_speed[0])
+        print("Optimized Front Steer : %f" %opt_front_steer[0])
+        print("Optimized Rear Speed : %f" %opt_rear_speed[0])
+        print("Optimized Rear Steer : %f" %opt_rear_steer[0])
+
+        print(self.getVelocitiesFromRobotModels(
+            front_steer=opt_front_steer[0],
+            front_speed=opt_front_speed[0],
+            rear_steer=opt_rear_steer[0],
+            rear_speed=opt_rear_speed[0]
+        ))
 
     def controlLaw(self, x_ref, x_current):
         """
@@ -107,16 +113,18 @@ class ModelPredictiveControl:
             if t != 0:
                 cost += cvxpy.quad_form(x_ref[:, t] - x[:, t], self.Q_)
 
-            # Update State
-            V = self.getVelocitiesFromRobotModels(
-                front_steer=u[1, t],
-                front_speed=u[0, t],
-                rear_steer=u[3, t],
-                rear_speed=u[2, t]
-            )
-            constraints += [x[0, t + 1] == x[0, t] + V[0] * math.cos(x[2, t]) * self.DT_ - V[1] * math.sin(x[2, t]) * self.DT_]
-            constraints += [x[1, t + 1] == x[1, t] + V[0] * math.sin(x[2, t]) * self.DT_ + V[1] * math.cos(x[2, t]) * self.DT_]
-            constraints += [x[2, t + 1] == x[2, t] + V[2] * self.DT_]
+            # # Update State
+            # V = self.getVelocitiesFromRobotModels(
+            #     front_steer=u[1, t],
+            #     front_speed=u[0, t],
+            #     rear_steer=u[3, t],
+            #     rear_speed=u[2, t]
+            # )
+            constraints += [x[0, t + 1] == x[0, t] + (self.kinematical_matrix_[0,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[0,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[0,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[0,3] * math.sin(u[3, t]) * u[2, t]) * math.cos(x[2, t]) * self.DT_ - (self.kinematical_matrix_[1,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[1,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[1,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[1,3] * math.sin(u[3, t]) * u[2, t]) * math.sin(x[2, t]) * self.DT_]
+            
+            
+            # constraints += [x[1, t + 1] == x[1, t] + (self.kinematical_matrix_[0,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[0,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[0,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[0,3] * math.sin(u[3, t]) * u[2, t]) * math.sin(x[2, t]) * self.DT_ + (self.kinematical_matrix_[1,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[1,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[1,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[1,3] * math.sin(u[3, t]) * u[2, t]) * math.cos(x[2, t]) * self.DT_]
+            # constraints += [x[2, t + 1] == x[2, t] + (self.kinematical_matrix_[2,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[2,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[2,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[2,3] * math.sin(u[3, t]) * u[2, t]) * self.DT_]
 
             if t < (self.HL_ - 1):
                 cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], self.Rd_)
@@ -125,7 +133,9 @@ class ModelPredictiveControl:
 
         cost += cvxpy.quad_form(x_ref[:, self.HL_] - x[:, self.HL_], self.Qf_)
 
-        constraints += [x[:, 0] == x_current]
+        x0 = [x_current[0,0], x_current[1,0], x_current[2,0]]
+
+        constraints += [x[:, 0] == x0]
         constraints += [cvxpy.abs(u[0, :]) <= self.MAX_TRAVEL_SPEED_]
         constraints += [cvxpy.abs(u[2, :]) <= self.MAX_TRAVEL_SPEED_]
 
@@ -135,7 +145,7 @@ class ModelPredictiveControl:
         if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
             optimized_x = np.array(x.value[0, :]).flatten() # this is only used in Plotting.
             optimized_y = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
-            optimized_yaw = np.array(x.value[3, :]).flatten() # this is only used in Plotting.
+            optimized_yaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
             optimized_front_speed = np.array(u.value[0, :]).flatten()
             optimized_front_steer = np.array(u.value[1, :]).flatten()
             optimized_rear_speed = np.array(u.value[2, :]).flatten()
@@ -179,12 +189,6 @@ class ModelPredictiveControl:
             print("Error: Model Parameters haven't been retrived.")
             return None
         
-        H = np.array([
-            [1, 0, 0],
-            [0, 1, self.wheel_base_/2],
-            [1, 0, 0],
-            [0, 1, -self.wheel_base_/2]
-        ])
         v1x = math.cos(front_steer) * front_speed
         v1y = math.sin(front_steer) * front_speed
         v2x = math.cos(rear_steer) * rear_speed
@@ -195,7 +199,7 @@ class ModelPredictiveControl:
             [v2x],
             [v2y]
         ])
-        vi = (H.transpose() @ H).inverse() @ H.transpose() @ vo
+        vi = self.kinematical_matrix_ @ vo
         return vi
 
     def setRobotModelParameters(self, wheel_base):
@@ -203,6 +207,14 @@ class ModelPredictiveControl:
         self.isModelParameterRetrived_ = True
         self.wheel_base_ = wheel_base
 
+        H = np.array([
+            [1, 0, 0],
+            [0, 1, self.wheel_base_/2],
+            [1, 0, 0],
+            [0, 1, -self.wheel_base_/2]
+        ])
+        self.kinematical_matrix_ = np.linalg.inv((H.transpose() @ H)) @ H.transpose()
+        
     def retriveReferenceFromCSV(self, file_name):
         
         node_lists = []
