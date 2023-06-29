@@ -48,6 +48,7 @@ class ModelPredictiveControl:
 
         self.isReferenceRetrived_ = False
         self.reference_ = None
+        self.trim_dist_ = 1
 
         self.x_ref_in_np_ = np.zeros((self.NX_, self.HL_ + 1))
         self.x_ref_full_info_ = []
@@ -223,13 +224,21 @@ class ModelPredictiveControl:
     
     def getReferenceTrajectoryWithinHorizon(self, x_current):
 
-        # Reference to teb_local_planner - find preview path.
-
-
-
         if not self.isReferenceRetrived_:
             return None
         
+        idx = 0
+        toPrune = False
+        for i in range(np.shape(self.reference_)[1]):
+
+            dist = math.sqrt((x_current[0] - self.reference_[0, i])**2 + (x_current[1] - self.reference_[1, i])**2)
+            if dist < self.trim_dist_:
+                toPrune = True
+                idx = i
+
+        if toPrune:
+            self.reference_ = np.delete(self.reference_, range(idx+1), axis=1)
+
         x_ref = np.zeros((self.NX_, self.HL_ + 1))
         
         for i in range(self.HL_ + 1):
