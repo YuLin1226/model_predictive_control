@@ -215,7 +215,7 @@ class ModelPredictiveControl:
                     n += 1
                     continue
 
-                node_lists.append(row)
+                node_lists.append([float(e) for e in row])
             # Node List Info:
             # x | y | yaw | vx | vy | w | front_wheel: angle | front_wheel: speed | rear_wheel: angle | rear_wheel: speed  | time_stamp
 
@@ -229,20 +229,20 @@ class ModelPredictiveControl:
         
         idx = 0
         toPrune = False
-        for i in range(np.shape(self.reference_)[1]):
+        for i in range(len(self.reference_)):
 
-            dist = math.sqrt((x_current[0] - self.reference_[0, i])**2 + (x_current[1] - self.reference_[1, i])**2)
+            dist = math.sqrt((x_current[0] - self.reference_[i][0])**2 + (x_current[1] - self.reference_[i][1])**2)
             if dist < self.trim_dist_:
                 toPrune = True
                 idx = i
 
         if toPrune:
-            self.reference_ = np.delete(self.reference_, range(idx+1), axis=1)
+            del self.reference_[:idx+1]
 
         x_ref = np.zeros((self.NX_, self.HL_ + 1))
         
         for i in range(self.HL_ + 1):
-            node = self.reference_[idx + i]
+            node = self.reference_[i]
             x_ref[0, i] = node[0]
             x_ref[1, i] = node[1]
             x_ref[2, i] = node[2]
