@@ -266,61 +266,63 @@ class ModelPredictiveControl:
         # Using TF to update x_current
         return x_current
     
-    # def predictMotion(self, x_current:State, x_ref_full_info):
+    def getRobotModelMatrice(self, x):
+
+        A = np.zeros((self.NX_, self.NX_))
+        A[0, 0] = 1.0
+        A[1, 1] = 1.0
+        A[2, 2] = 1.0
+
+        B = np.zeros((3, 3))
+        B[0, 0] = math.cos(x[0, 2])
+        B[0, 1] = math.sin(x[0, 2]) * (-1)
+        B[1, 0] = math.sin(x[0, 2])
+        B[1, 1] = math.cos(x[0, 2])
+        B[2, 2] = 1
+
+        B = B @ self.kinematical_matrix_ 
+
+        return A, B
+
+    def getControlMatrixFromPrediction(self, front_steer, rear_steer):
+
+        V = np.zeros((4, 2))
+        V[0, 0] = math.cos(front_steer)
+        V[1, 0] = math.sin(front_steer)
+        V[2, 1] = math.cos(rear_steer)
+        V[3, 1] = math.sin(rear_steer)
+    
+        return V
+    
+    def predictMotion(self, x_ref, x_current, control_input):
         
-    #     """
-    #     x_predicted is a list, containing
-    #     - x
-    #     - y
-    #     - yaw
-    #     - vx
-    #     - vy
-    #     - w
-        
-    #     This list will be used in "getVelocitiesFromRobotModels" in "controlLaw".
-    #     """
+        """
+        x_ref         : array, size = (NX, HL+1)
+        x_current     : array, size = (NX,    1)
+        control_input : list,  size = [HL][NU]
+        """
 
-    #     x_predicted_full_info = []
-    #     x_predicted_full_info.append([
-    #         x_current.x_,
-    #         x_current.y_,
-    #         x_current.yaw_,
-    #         x_current.vx_,
-    #         x_current.vy_,
-    #         x_current.front_steer_,
-    #         x_current.front_speed_,
-    #         x_current.rear_steer_,
-    #         x_current.rear_speed_
-    #     ])
+        # make an empty array
+        x_predicted = x_ref * 0.0
+        # set init state
+        x_predicted[0, 0] = x_current[0, 0]
+        x_predicted[1, 0] = x_current[1, 0]
+        x_predicted[2, 0] = x_current[2, 0]
+        # predict future state 
+        for i in range(len(control_input)):
 
-    #     state = State(
-    #         x=x_current.x_, 
-    #         y=x_current.y_, 
-    #         yaw=x_current.yaw_,
-    #         vx=x_current.vx_,
-    #         vy=x_current.vy_,
-    #         front_steer=x_current.front_steer_,
-    #         front_speed=x_current.front_speed_,
-    #         rear_steer=x_current.rear_steer_,
-    #         rear_speed=x_current.rear_speed_
-    #     )
-    #     for i in range(self.HL_):
-    #         # we should use "optimized_result" to update state.
-    #         state = self.updateState(last_state=state)
-    #         x_predicted_full_info.append([
-    #         state.x_,
-    #         state.y_,
-    #         state.yaw_,
-    #         state.vx_,
-    #         state.vy_,
-    #         state.front_steer_,
-    #         state.front_speed_,
-    #         state.rear_steer_,
-    #         state.rear_speed_
-    #     ])
+            V = self.getVelocitiesFromRobotModels(
+                front_steer=control_input[i][0], 
+                front_speed=control_input[i][1], 
+                rear_steer=control_input[i][2], 
+                rear_speed=control_input[i][3]
+            )
+            
+            x_predicted[0, i+1] = x_predicted[0, i] + V[0] * math.cos(x_predicted[2, i]) * self.DT_ - V[1] * math.sin(x_predicted[2, i]) * self.DT_
+            x_predicted[1, i+1] = x_predicted[1, i] + V[0] * math.sin(x_predicted[2, i]) * self.DT_ + V[1] * math.cos(x_predicted[2, i]) * self.DT_
+            x_predicted[2, i+1] = x_predicted[2, i] + V[2] * self.DT_
 
-    #     return x_predicted_full_info
-
+        return x_predicted
 
 
 if __name__ == '__main__' :
