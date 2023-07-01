@@ -163,25 +163,25 @@ class ModelPredictiveControl:
 
         return optimized_x, optimized_y, optimized_yaw, optimized_front_speed, optimized_front_steer, optimized_rear_speed, optimized_rear_steer
         
-    def updateState(self, last_state:State) -> State:
+    # def updateState(self, last_state:State) -> State:
         
-        V = self.getVelocitiesFromRobotModels(
-            front_steer=last_state.front_steer_, 
-            front_speed=last_state.front_speed_, 
-            rear_steer=last_state.rear_steer_, 
-            rear_speed=last_state.rear_speed_
-        )
+    #     V = self.getVelocitiesFromRobotModels(
+    #         front_steer=last_state.front_steer_, 
+    #         front_speed=last_state.front_speed_, 
+    #         rear_steer=last_state.rear_steer_, 
+    #         rear_speed=last_state.rear_speed_
+    #     )
         
-        x = last_state.x_ + V[0] * math.cos(last_state.yaw_) * self.DT_ - V[1] * math.sin(last_state.yaw_) * self.DT_
-        y = last_state.y_ + V[0] * math.sin(last_state.yaw_) * self.DT_ + V[1] * math.cos(last_state.yaw_) * self.DT_
-        yaw = last_state.yaw_ + V[2] * self.DT_
+    #     x = last_state.x_ + V[0] * math.cos(last_state.yaw_) * self.DT_ - V[1] * math.sin(last_state.yaw_) * self.DT_
+    #     y = last_state.y_ + V[0] * math.sin(last_state.yaw_) * self.DT_ + V[1] * math.cos(last_state.yaw_) * self.DT_
+    #     yaw = last_state.yaw_ + V[2] * self.DT_
         
-        return State(x=x, y=y, yaw=yaw, vx=V[0], vy=V[1], w=V[2], 
-                     front_steer=last_state.front_steer_, 
-                     front_speed=last_state.front_speed_, 
-                     rear_steer=last_state.rear_steer_, 
-                     rear_speed=last_state.rear_speed_
-                )
+    #     return State(x=x, y=y, yaw=yaw, vx=V[0], vy=V[1], w=V[2], 
+    #                  front_steer=last_state.front_steer_, 
+    #                  front_speed=last_state.front_speed_, 
+    #                  rear_steer=last_state.rear_steer_, 
+    #                  rear_speed=last_state.rear_speed_
+    #             )
 
     def getVelocitiesFromRobotModels(self, front_steer, front_speed, rear_steer, rear_speed):
 
