@@ -94,13 +94,13 @@ class ModelPredictiveControl:
             rear_speed=opt_rear_speed[0]
         ))
 
-    def controlLaw(self, x_ref, x_current):
+    def controlLaw(self, x_ref, x_current, x_predicted, u_predicted):
         """
-        x_ref: np.arrary with size (self.NX_, self.HL_ + 1)
-        x_current: np.arrary with size (self.NX_, 1)
+        x_ref       : array, size (NX, HL+1)
+        x_current   : array, size (NX,    1)
+        x_predicted : array, size (NX, HL+1)
+        u_predicted : array, size (NU,   HL)  
         """
-
-
         x = cvxpy.Variable((self.NX_, self.HL_ + 1))
         u = cvxpy.Variable((self.NU_, self.HL_))
 
@@ -113,18 +113,13 @@ class ModelPredictiveControl:
             if t != 0:
                 cost += cvxpy.quad_form(x_ref[:, t] - x[:, t], self.Q_)
 
-            # # Update State
-            # V = self.getVelocitiesFromRobotModels(
-            #     front_steer=u[1, t],
-            #     front_speed=u[0, t],
-            #     rear_steer=u[3, t],
-            #     rear_speed=u[2, t]
-            # )
-            constraints += [x[0, t + 1] == x[0, t] + (self.kinematical_matrix_[0,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[0,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[0,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[0,3] * math.sin(u[3, t]) * u[2, t]) * math.cos(x[2, t]) * self.DT_ - (self.kinematical_matrix_[1,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[1,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[1,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[1,3] * math.sin(u[3, t]) * u[2, t]) * math.sin(x[2, t]) * self.DT_]
-            
-            
-            # constraints += [x[1, t + 1] == x[1, t] + (self.kinematical_matrix_[0,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[0,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[0,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[0,3] * math.sin(u[3, t]) * u[2, t]) * math.sin(x[2, t]) * self.DT_ + (self.kinematical_matrix_[1,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[1,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[1,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[1,3] * math.sin(u[3, t]) * u[2, t]) * math.cos(x[2, t]) * self.DT_]
-            # constraints += [x[2, t + 1] == x[2, t] + (self.kinematical_matrix_[2,0] * math.cos(u[1, t]) * u[0, t] + self.kinematical_matrix_[2,1] * math.sin(u[1, t]) * u[0, t] + self.kinematical_matrix_[2,2] * math.cos(u[3, t]) * u[2, t] + self.kinematical_matrix_[2,3] * math.sin(u[3, t]) * u[2, t]) * self.DT_]
+            A, B = self.getRobotModelMatrice(x=x_predicted[:, t])
+            V = self.getControlMatrixFromPrediction(front_steer=u_predicted[1, t], rear_steer=u_predicted[3, t])
+            wheel_speed_matrix = np.array([
+                [u_predicted[0, t]],
+                [u_predicted[2, t]]
+            ])
+            constraints += [x[:, t + 1] == A @ x[:, t] + B @ V @ wheel_speed_matrix]
 
             if t < (self.HL_ - 1):
                 cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], self.Rd_)
