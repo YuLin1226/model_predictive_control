@@ -76,12 +76,22 @@ class ModelPredictiveControl:
             print("Error: Reference hasn't been retrived.")
             return False
             
+        control_input = []
+        if not control_input:
+            for i in range(self.HL_):
+                control_input.append(
+                    [0, 0, 0, 0]
+                )
+
         x_current = self.getCurrentState()
         x_ref = self.getReferenceTrajectoryWithinHorizon(x_current=x_current)
+        x_predicted = self.predictMotion(x_ref=x_ref, x_current=x_current, control_input=control_input)
 
         opt_x, opt_y, opt_yaw, opt_front_speed, opt_front_steer, opt_rear_speed, opt_rear_steer = self.controlLaw(
             x_ref=x_ref,
-            x_current=x_current
+            x_current=x_current,
+            x_predicted=x_predicted,
+            u_predicted=np.array(control_input).transpose()
         )
 
         print("Optimized Front Speed : %f" %opt_front_speed[0])
@@ -104,8 +114,8 @@ class ModelPredictiveControl:
         u_predicted : array, size (NU,   HL)  
         """
         x = cvxpy.Variable((self.NX_, self.HL_ + 1))
-        u_steer = cvxpy.Variable((self.NU_/2, self.HL_))
-        u_speed = cvxpy.Variable((self.NU_/2, self.HL_))
+        u_steer = cvxpy.Variable((int(self.NU_/2), self.HL_))
+        u_speed = cvxpy.Variable((int(self.NU_/2), self.HL_))
 
         cost = 0.0
         constraints = []
@@ -275,10 +285,10 @@ class ModelPredictiveControl:
         A[2, 2] = 1.0
 
         B = np.zeros((3, 3))
-        B[0, 0] = math.cos(x[0, 2])
-        B[0, 1] = math.sin(x[0, 2]) * (-1)
-        B[1, 0] = math.sin(x[0, 2])
-        B[1, 1] = math.cos(x[0, 2])
+        B[0, 0] = math.cos(x[2])
+        B[0, 1] = math.sin(x[2]) * (-1)
+        B[1, 0] = math.sin(x[2])
+        B[1, 1] = math.cos(x[2])
         B[2, 2] = 1
 
         B = B @ self.kinematical_matrix_ 
