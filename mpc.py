@@ -122,12 +122,16 @@ class ModelPredictiveControl:
         
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ V @ u_speed]
 
+            if t == 0:
+                constraints += [cvxpy.abs(u_steer[0, t] - u_predicted[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+                constraints += [cvxpy.abs(u_steer[1, t] - u_predicted[3, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+                
             if t < (self.HL_ - 1):
                 cost += cvxpy.quad_form(u_steer[:, t + 1] - u_steer[:, t], self.R_steer_diff_)
                 cost += cvxpy.quad_form(u_speed[:, t + 1] - u_speed[:, t], self.R_steer_diff_)
-                # constraints += [cvxpy.abs(u[1, t + 1] - u[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
-                # constraints += [cvxpy.abs(u[3, t + 1] - u[3, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
-
+                constraints += [cvxpy.abs(u_steer[0, t+1] - u_steer[0, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+                constraints += [cvxpy.abs(u_steer[1, t+1] - u_steer[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+                
         cost += cvxpy.quad_form(x_ref[:, self.HL_] - x[:, self.HL_], self.Q_final_)
 
         x0 = [x_current[0,0], x_current[1,0], x_current[2,0]]
