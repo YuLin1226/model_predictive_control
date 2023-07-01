@@ -130,7 +130,7 @@ class ModelPredictiveControl:
             A, B = self.getRobotModelMatrice(x=x_predicted[:, t])
             V = self.getControlMatrixFromPrediction(front_steer=u_predicted[1, t], rear_steer=u_predicted[3, t])
         
-            constraints += [x[:, t + 1] == A @ x[:, t] + B @ V @ u_speed]
+            constraints += [x[:, t + 1] == A @ x[:, t] + B @ V @ u_speed[:, t]]
 
             if t == 0:
                 constraints += [cvxpy.abs(u_steer[0, t] - u_predicted[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
@@ -148,7 +148,7 @@ class ModelPredictiveControl:
 
         constraints += [x[:, 0] == x0]
         constraints += [cvxpy.abs(u_speed[0, :]) <= self.MAX_TRAVEL_SPEED_]
-        constraints += [cvxpy.abs(u_speed[2, :]) <= self.MAX_TRAVEL_SPEED_]
+        constraints += [cvxpy.abs(u_speed[1, :]) <= self.MAX_TRAVEL_SPEED_]
 
         prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
         prob.solve(solver=cvxpy.ECOS, verbose=False)
