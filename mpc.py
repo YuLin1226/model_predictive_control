@@ -53,13 +53,13 @@ class ModelPredictiveControl:
         self.reference_ = None
         self.trim_dist_ = 1
 
-        self.x_ref_in_np_ = np.zeros((self.NX_, self.HL_ + 1))
-        self.x_ref_full_info_ = []
-        # full info includes:
-        # - pose (x, y, yaw)
-        # - twist (vx, vy, w)
-        # - wheel_info (front & rear -- steer & speed)
-        # - time_stamp
+        # self.x_ref_in_np_ = np.zeros((self.NX_, self.HL_ + 1))
+        # self.x_ref_full_info_ = []
+        # # full info includes:
+        # # - pose (x, y, yaw)
+        # # - twist (vx, vy, w)
+        # # - wheel_info (front & rear -- steer & speed)
+        # # - time_stamp
 
     def initialization(self, wheel_base, file_name):
 
