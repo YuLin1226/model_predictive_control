@@ -6,6 +6,7 @@ from geometry_msgs.msg import Twist
 from gazebo_msgs.msg import ModelStates
 import tf
 import time
+import csv
 from mpc import ModelPredictiveControl
 
 class RobotPose:
@@ -28,6 +29,7 @@ class Planner:
 
         self.mpc_ = ModelPredictiveControl()
         self.robot_pose_ = RobotPose(x=0.0, y=0.0, yaw=0.0)
+        self.node_list_ = []
 
         self.initialization()
         rospy.init_node("mpc_planner_node", anonymous=True)
@@ -36,6 +38,8 @@ class Planner:
 
         while not rospy.is_shutdown():
             self.start()
+        
+        self.saveRobotTrajectory()
         rospy.spin()
 
     def initialization(self):
@@ -76,6 +80,21 @@ class Planner:
         euler = tf.transformations.euler_from_quaternion(quaternion)
         yaw = euler[2]
         self.robot_pose_.update(x=x, y=y, yaw=yaw)
+        self.node_list_.append([x, y])
+
+    def saveRobotTrajectory(self):
+        
+        print("Save trajectory as csv.")
+        with open('robot_trajectory.csv', 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['X', 'Y'])
+
+            for node in self.node_list_:
+                writer.writerow([ 
+                    node[0], 
+                    node[1]
+                    ])
+        
 
 
 
