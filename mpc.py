@@ -42,8 +42,9 @@ class ModelPredictiveControl:
         self.Q_ = np.diag([0.01, 0.01, 0.01])
         self.Q_final_ = np.diag([0.01, 0.01, 0.01])
 
+        self.LOOKAHEAD_DIST_ = 1
         self.MAX_TRAVEL_SPEED_ = 0.5
-        self.MAX_STEER_SPEED_ = 1
+        self.MAX_STEER_SPEED_ = 0.5
         self.DT_ = 0.1
 
         self.isModelParameterRetrived_ = False
@@ -97,10 +98,10 @@ class ModelPredictiveControl:
                 )
 
             output_v = self.getVelocitiesFromRobotModels(
-                        front_steer=opt_front_steer[0],
                         front_speed=opt_front_speed[0],
-                        rear_steer=opt_rear_steer[0],
-                        rear_speed=opt_rear_speed[0]
+                        front_steer=opt_front_steer[0],
+                        rear_speed=opt_rear_speed[0],
+                        rear_steer=opt_rear_steer[0]
                     )
         
         print("Optimized Front Speed : %f" %opt_front_speed[0])
@@ -108,7 +109,6 @@ class ModelPredictiveControl:
         print("Optimized Rear Speed : %f" %opt_rear_speed[0])
         print("Optimized Rear Steer : %f" %opt_rear_steer[0])
         return output_v
-
 
     def controlLaw(self, x_ref, x_current, x_predicted, u_predicted):
         """
@@ -178,26 +178,6 @@ class ModelPredictiveControl:
 
         return optimized_x, optimized_y, optimized_yaw, optimized_front_speed, optimized_front_steer, optimized_rear_speed, optimized_rear_steer
         
-    # def updateState(self, last_state:State) -> State:
-        
-    #     V = self.getVelocitiesFromRobotModels(
-    #         front_steer=last_state.front_steer_, 
-    #         front_speed=last_state.front_speed_, 
-    #         rear_steer=last_state.rear_steer_, 
-    #         rear_speed=last_state.rear_speed_
-    #     )
-        
-    #     x = last_state.x_ + V[0] * math.cos(last_state.yaw_) * self.DT_ - V[1] * math.sin(last_state.yaw_) * self.DT_
-    #     y = last_state.y_ + V[0] * math.sin(last_state.yaw_) * self.DT_ + V[1] * math.cos(last_state.yaw_) * self.DT_
-    #     yaw = last_state.yaw_ + V[2] * self.DT_
-        
-    #     return State(x=x, y=y, yaw=yaw, vx=V[0], vy=V[1], w=V[2], 
-    #                  front_steer=last_state.front_steer_, 
-    #                  front_speed=last_state.front_speed_, 
-    #                  rear_steer=last_state.rear_steer_, 
-    #                  rear_speed=last_state.rear_speed_
-    #             )
-
     def getVelocitiesFromRobotModels(self, front_steer, front_speed, rear_steer, rear_speed):
 
         if not self.isModelParameterRetrived_:
@@ -254,6 +234,7 @@ class ModelPredictiveControl:
         if not self.isReferenceRetrived_:
             return None
         
+        # Prune already passed path.
         idx = 0
         toPrune = False
         for i in range(len(self.reference_)):
@@ -266,14 +247,33 @@ class ModelPredictiveControl:
         if toPrune:
             del self.reference_[:idx+1]
 
-        x_ref = np.zeros((self.NX_, self.HL_ + 1))
-        
-        for i in range(self.HL_ + 1):
-            node = self.reference_[i]
-            x_ref[0, i] = node[0]
-            x_ref[1, i] = node[1]
-            x_ref[2, i] = node[2]
+        # Prepare ref path
+        travel = 0
+        considered_nodes = []
+        for i in range(len(self.reference_)):
+            if not considered_nodes:
+                considered_nodes.append(self.reference_[i])
+                continue
+            dx = self.reference_[i][0] - self.reference_[i-1][0]
+            dy = self.reference_[i][1] - self.reference_[i-1][1]
 
+            travel = travel + math.sqrt(dx**2 + dy**2)
+            if travel <= self.LOOKAHEAD_DIST_ :
+                considered_nodes.append(self.reference_[i])
+            else:
+                break
+    
+        x_ref = np.zeros((self.NX_, self.HL_ + 1))
+        for i in range(self.HL_ + 1):
+            j = self.HL_ - i 
+            node = considered_nodes[-1]
+            x_ref[0, j] = node[0]
+            x_ref[1, j] = node[1]
+            x_ref[2, j] = node[2]
+            if not len(considered_nodes) == 1:
+                considered_nodes.pop()
+
+        # print(x_ref)
         return x_ref
         
     def updateCurrentState(self, x, y, yaw):
