@@ -99,12 +99,13 @@ class ModelPredictiveControl:
         print("Optimized Rear Speed : %f" %opt_rear_speed[0])
         print("Optimized Rear Steer : %f" %opt_rear_steer[0])
 
-        print(self.getVelocitiesFromRobotModels(
-            front_steer=opt_front_steer[0],
-            front_speed=opt_front_speed[0],
-            rear_steer=opt_rear_steer[0],
-            rear_speed=opt_rear_speed[0]
-        ))
+        output_v = self.getVelocitiesFromRobotModels(
+                    front_steer=opt_front_steer[0],
+                    front_speed=opt_front_speed[0],
+                    rear_steer=opt_rear_steer[0],
+                    rear_speed=opt_rear_speed[0]
+                )
+
 
     def controlLaw(self, x_ref, x_current, x_predicted, u_predicted):
         """
