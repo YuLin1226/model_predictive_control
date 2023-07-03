@@ -33,6 +33,7 @@ class Planner:
 
         self.initialization()
         rospy.init_node("mpc_planner_node", anonymous=True)
+        self.time_ = self.getTimeNow()
         self.pub_ = rospy.Publisher(robot_cmd_vel_topic_name, Twist, queue_size = 1)
         self.sub_ = rospy.Subscriber(robot_pose_topic_name, ModelStates, self.updateRobotPose)
 
@@ -80,19 +81,29 @@ class Planner:
         euler = tf.transformations.euler_from_quaternion(quaternion)
         yaw = euler[2]
         self.robot_pose_.update(x=x, y=y, yaw=yaw)
-        self.node_list_.append([x, y])
+
+        dt = self.getTimeNow() - self.time_
+        if dt > 0.25:
+            self.node_list_.append([x, y, yaw])
+            self.time_ = self.getTimeNow()
+
+    def getTimeNow(self) -> float:
+        
+        now = rospy.get_rostime()
+        return now.to_sec()
 
     def saveRobotTrajectory(self):
         
         print("Save trajectory as csv.")
         with open('robot_trajectory.csv', 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
-            writer.writerow(['X', 'Y'])
+            writer.writerow(['X', 'Y', 'YAW'])
 
             for node in self.node_list_:
                 writer.writerow([ 
                     node[0], 
-                    node[1]
+                    node[1],
+                    node[2]
                     ])
         
 
