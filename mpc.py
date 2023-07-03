@@ -30,19 +30,20 @@ class ModelPredictiveControl:
 
     def __init__(self) -> None:
         
+        self.ITERATION_TIMES_ = 1
         self.HL_ = 5 # Horizon length
         self.NX_ = 3 # Number of design variables: x, y, yaw
         self.NU_ = 4 # Number of control inputs: front steer & speed, rear steer & speed
 
         self.R_steer_ = np.diag([0.01, 0.01])
-        self.R_steer_diff_ = np.diag([0.001, 0.001])
+        self.R_steer_diff_ = np.diag([0.01, 0.01])
         self.R_speed_ = np.diag([0.01, 0.01])
-        self.R_speed_diff_ = np.diag([0.001, 0.001])
+        self.R_speed_diff_ = np.diag([0.01, 0.01])
         self.Q_ = np.diag([0.01, 0.01, 0.01])
-        self.Q_final_ = np.diag([0.001, 0.001, 0.001])
+        self.Q_final_ = np.diag([0.01, 0.01, 0.01])
 
         self.MAX_TRAVEL_SPEED_ = 0.5
-        self.MAX_STEER_SPEED_ = 0.5
+        self.MAX_STEER_SPEED_ = 1
         self.DT_ = 0.1
 
         self.isModelParameterRetrived_ = False
@@ -53,13 +54,7 @@ class ModelPredictiveControl:
         self.reference_ = None
         self.trim_dist_ = 1
 
-        # self.x_ref_in_np_ = np.zeros((self.NX_, self.HL_ + 1))
-        # self.x_ref_full_info_ = []
-        # # full info includes:
-        # # - pose (x, y, yaw)
-        # # - twist (vx, vy, w)
-        # # - wheel_info (front & rear -- steer & speed)
-        # # - time_stamp
+
 
     def initialization(self, wheel_base, file_name):
 
@@ -76,36 +71,42 @@ class ModelPredictiveControl:
             print("Error: Reference hasn't been retrived.")
             return False
             
-        control_input = []
-        if not control_input:
+        self.control_input_ = []
+        if not self.control_input_:
             for i in range(self.HL_):
-                control_input.append(
+                self.control_input_.append(
                     [0, 0, 0, 0]
                 )
 
-        x_current = self.updateCurrentState(x=current_pos_x, y=current_pos_y, yaw=current_pos_yaw)
-        x_ref = self.getReferenceTrajectoryWithinHorizon(x_current=x_current)
-        x_predicted = self.predictMotion(x_ref=x_ref, x_current=x_current, control_input=control_input)
+        for i in range(self.ITERATION_TIMES_):
+            x_current = self.updateCurrentState(x=current_pos_x, y=current_pos_y, yaw=current_pos_yaw)
+            x_ref = self.getReferenceTrajectoryWithinHorizon(x_current=x_current)
+            x_predicted = self.predictMotion(x_ref=x_ref, x_current=x_current, control_input=self.control_input_)
 
-        opt_x, opt_y, opt_yaw, opt_front_speed, opt_front_steer, opt_rear_speed, opt_rear_steer = self.controlLaw(
-            x_ref=x_ref,
-            x_current=x_current,
-            x_predicted=x_predicted,
-            u_predicted=np.array(control_input).transpose()
-        )
+            opt_x, opt_y, opt_yaw, opt_front_speed, opt_front_steer, opt_rear_speed, opt_rear_steer = self.controlLaw(
+                x_ref=x_ref,
+                x_current=x_current,
+                x_predicted=x_predicted,
+                u_predicted=np.array(self.control_input_).transpose()
+            )
 
+            self.control_input_ = []
+            for i in range(self.HL_):
+                self.control_input_.append(
+                    [opt_front_speed[i], opt_front_steer[i], opt_rear_speed[i], opt_rear_steer[i]]
+                )
+
+            output_v = self.getVelocitiesFromRobotModels(
+                        front_steer=opt_front_steer[0],
+                        front_speed=opt_front_speed[0],
+                        rear_steer=opt_rear_steer[0],
+                        rear_speed=opt_rear_speed[0]
+                    )
+        
         print("Optimized Front Speed : %f" %opt_front_speed[0])
         print("Optimized Front Steer : %f" %opt_front_steer[0])
         print("Optimized Rear Speed : %f" %opt_rear_speed[0])
         print("Optimized Rear Steer : %f" %opt_rear_steer[0])
-
-        output_v = self.getVelocitiesFromRobotModels(
-                    front_steer=opt_front_steer[0],
-                    front_speed=opt_front_speed[0],
-                    rear_steer=opt_rear_steer[0],
-                    rear_speed=opt_rear_speed[0]
-                )
-        
         return output_v
 
 
@@ -141,7 +142,7 @@ class ModelPredictiveControl:
                 
             if t < (self.HL_ - 1):
                 cost += cvxpy.quad_form(u_steer[:, t + 1] - u_steer[:, t], self.R_steer_diff_)
-                cost += cvxpy.quad_form(u_speed[:, t + 1] - u_speed[:, t], self.R_steer_diff_)
+                cost += cvxpy.quad_form(u_speed[:, t + 1] - u_speed[:, t], self.R_speed_diff_)
                 constraints += [cvxpy.abs(u_steer[0, t+1] - u_steer[0, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
                 constraints += [cvxpy.abs(u_steer[1, t+1] - u_steer[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
                 
@@ -328,10 +329,10 @@ class ModelPredictiveControl:
         for i in range(len(control_input)):
 
             V = self.getVelocitiesFromRobotModels(
-                front_steer=control_input[i][0], 
-                front_speed=control_input[i][1], 
-                rear_steer=control_input[i][2], 
-                rear_speed=control_input[i][3]
+                front_speed=control_input[i][0], 
+                front_steer=control_input[i][1], 
+                rear_speed=control_input[i][2],
+                rear_steer=control_input[i][3] 
             )
             
             x_predicted[0, i+1] = x_predicted[0, i] + V[0] * math.cos(x_predicted[2, i]) * self.DT_ - V[1] * math.sin(x_predicted[2, i]) * self.DT_
