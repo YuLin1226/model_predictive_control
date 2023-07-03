@@ -66,7 +66,7 @@ class ModelPredictiveControl:
         self.setRobotModelParameters(wheel_base=wheel_base)
         self.retriveReferenceFromCSV(file_name=file_name)
 
-    def start(self):
+    def start(self, current_pos_x, current_pos_y, current_pos_yaw):
         
         if not self.isModelParameterRetrived_:
             print("Error: Model Parameters haven't been retrived.")
@@ -83,7 +83,7 @@ class ModelPredictiveControl:
                     [0, 0, 0, 0]
                 )
 
-        x_current = self.getCurrentState()
+        x_current = self.updateCurrentState(x=current_pos_x, y=current_pos_y, yaw=current_pos_yaw)
         x_ref = self.getReferenceTrajectoryWithinHorizon(x_current=x_current)
         x_predicted = self.predictMotion(x_ref=x_ref, x_current=x_current, control_input=control_input)
 
@@ -273,9 +273,11 @@ class ModelPredictiveControl:
 
         return x_ref
         
-    def getCurrentState(self):
+    def updateCurrentState(self, x, y, yaw):
         x_current = np.zeros((self.NX_, 1))
-        # Using TF to update x_current
+        x_current[0, 0] = x
+        x_current[1, 0] = y
+        x_current[2, 0] = yaw
         return x_current
     
     def getRobotModelMatrice(self, x):
