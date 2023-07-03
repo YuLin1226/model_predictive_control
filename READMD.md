@@ -21,7 +21,46 @@ State:
 - Wheel Info: front steer, front speed, rear steer, rear speed
 
 
-# Notes
+# Development
 
-x_init: represent "Current State", this state should be updated from TF.
+State Update Function:
+
+$$
+\begin{bmatrix}
+    x(k+1) \\ y(k+1) \\ \theta(k+1)
+\end{bmatrix}
+=
+\begin{bmatrix}
+    1 & 0 & 0 \\
+    0 & 1 & 0 \\
+    0 & 0 & 1
+\end{bmatrix}
+\begin{bmatrix}
+    x(k) \\ y(k) \\ \theta(k)
+\end{bmatrix}
++
+\begin{bmatrix}
+    \cos{\theta(k)} & -\sin{\theta(k)} & 0 \\
+    \sin{\theta(k)} & \cos{\theta(k)} & 0 \\
+    0 & 0 & 1 \\
+\end{bmatrix}
+\begin{bmatrix}
+    V_x \\ V_y \\ \omega
+\end{bmatrix}
+$$
+
+Double S/D Kinematics:
+
+$$
+H = 
+\begin{bmatrix}
+    1 & 0 & 0 \\
+    0 & 1 & \frac{WB}{2} \\
+    1 & 0 & 0 \\
+    0 & 1 & -\frac{WB}{2}
+\end{bmatrix}
+$$
+$$
+V_o = (H^TH)^{-1}H^T V_i
+$$
 
