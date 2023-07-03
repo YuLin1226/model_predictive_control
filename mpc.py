@@ -105,6 +105,8 @@ class ModelPredictiveControl:
                     rear_steer=opt_rear_steer[0],
                     rear_speed=opt_rear_speed[0]
                 )
+        
+        return output_v
 
 
     def controlLaw(self, x_ref, x_current, x_predicted, u_predicted):
