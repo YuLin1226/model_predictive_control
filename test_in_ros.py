@@ -6,35 +6,62 @@ from geometry_msgs.msg import Twist
 from gazebo_msgs.msg import ModelStates
 import tf
 import time
+from mpc import ModelPredictiveControl
 
-class RobotPoseNode:
+class RobotPose:
 
     def __init__(self, x:float, y:float, yaw:float) -> None:
 
         self.x_ = x
         self.y_ = y
         self.yaw_ = yaw
+
+    def update(self, x:float, y:float, yaw:float) -> None:
+        self.x_ = x
+        self.y_ = y
+        self.yaw_ = yaw
         
 
-class RobotPoseSubscriber:
+class Planner:
 
-    def __init__(self, topic_name:str) -> None:
-        
-        self.node_list_ = []
-        self.node_ = RobotPoseNode(x=0, y=0, yaw=0)
+    def __init__(self, robot_cmd_vel_topic_name:str, robot_pose_topic_name:str) -> None:
 
-        rospy.init_node("robot_pose_subscriber_node", anonymous=True)
-        rospy.Subscriber(topic_name, ModelStates, self.callback)
+        self.mpc_ = ModelPredictiveControl()
+        self.robot_pose_ = RobotPose(x=0.0, y=0.0, yaw=0.0)
+
+        self.initialization()
+        rospy.init_node("mpc_planner_node", anonymous=True)
+        self.pub_ = rospy.Publisher(robot_cmd_vel_topic_name, Twist, queue_size = 1)
+        self.sub_ = rospy.Subscriber(robot_pose_topic_name, ModelStates, self.updateRobotPose)
 
         while not rospy.is_shutdown():
-            
-            print("Add a robot pose node.")
-            self.node_list_.append(self.node_)
-            time.sleep(1)
-
+            self.start()
         rospy.spin()
 
-    def callback(self, msg:ModelStates):
+    def initialization(self):
+
+        self.mpc_.initialization(
+            wheel_base=1,
+            file_name="reference.csv"
+        )
+
+    def start(self):
+        
+        v = self.mpc_.start(current_pos_x=self.robot_pose_.x_, current_pos_y=self.robot_pose_.y_, current_pos_yaw=self.robot_pose_.yaw_)
+        self.pubCommandVelocity(vx=v[0], vy=v[1], w=v[2])
+
+    def pubCommandVelocity(self, vx, vy, w):
+        
+        twist = Twist()
+        twist.linear.x = vx
+        twist.linear.y = vy
+        twist.linear.z = 0
+        twist.angular.x = 0
+        twist.angular.y = 0
+        twist.angular.z = w
+        self.pub_.publish(twist)
+
+    def updateRobotPose(self, msg:ModelStates):
 
         robot_pose = msg.pose[1]
         x = robot_pose.position.x
@@ -48,7 +75,9 @@ class RobotPoseSubscriber:
             )
         euler = tf.transformations.euler_from_quaternion(quaternion)
         yaw = euler[2]
-        self.node_ = RobotPoseNode(x=x, y=y, yaw=yaw)
+        self.robot_pose_.update(x=x, y=y, yaw=yaw)
+
+
 
 if __name__ == '__main__' :
 
