@@ -3,7 +3,6 @@
 
 import matplotlib.pyplot as plt
 import math
-from general_bicycle_model import GeneralBicycleModel
 import csv
 
 class PoseNode:
@@ -95,5 +94,5 @@ class RobotPoseAnalyst:
 
 if __name__ == '__main__' :
 
-    RPA = RobotPoseAnalyst("robot_trajectory.csv", "output.csv")
+    RPA = RobotPoseAnalyst("robot_trajectory.csv", "reference.csv")
     RPA.doAnalysis()
