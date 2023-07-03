@@ -100,4 +100,5 @@ class Planner:
 
 if __name__ == '__main__' :
 
-    pass
+    p = Planner(robot_cmd_vel_topic_name='/dual_wheel_steering_controller/cmd_vel', robot_pose_topic_name="/gazebo/model_states")
+    # p.start()
