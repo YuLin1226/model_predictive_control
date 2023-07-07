@@ -125,13 +125,17 @@ class ModelPredictiveControl:
             if t != 0:
                 cost += cvxpy.quad_form(x_ref[:, t] - x[:, t], self.Q_)
 
-            A, B, C = self.getRobotModelMatrice()
+            A, B, C = self.getRobotModelMatrice(theta=x_predicted[2, t],
+                                                v_f=u_predicted[0, t],
+                                                delta_f=u_predicted[1, t],
+                                                v_r=u_predicted[2, t],
+                                                delta_f=u_predicted[3, t])
         
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
-            if t == 0:
-                constraints += [cvxpy.abs(u[0, t] - u_predicted[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
-                constraints += [cvxpy.abs(u[1, t] - u_predicted[3, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+            # if t == 0:
+            #     constraints += [cvxpy.abs(u[1, t] - u_predicted[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+            #     constraints += [cvxpy.abs(u[3, t] - u_predicted[3, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
                 
             if t < (self.HL_ - 1):
                 cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], self.R_diff_)
@@ -275,7 +279,7 @@ class ModelPredictiveControl:
         x_current[2, 0] = yaw
         return x_current
     
-    def getRobotModelMatrice(self, theta, v_f, delta_f, v_r, delta_r, dt):
+    def getRobotModelMatrice(self, theta, v_f, delta_f, v_r, delta_r):
 
         A = np.zeros((self.NX_, self.NX_))
         B = np.zeros((self.NX_, self.NU_))
@@ -284,25 +288,25 @@ class ModelPredictiveControl:
         A[0, 0] = 1.0
         A[1, 1] = 1.0
         A[2, 2] = 1.0
-        A[0, 2] = -0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta) -0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta)
-        A[1, 2] = 0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta) -0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta)
+        A[0, 2] = -0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta) -0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta)
+        A[1, 2] = 0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta) -0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta)
         # Define B
-        B[0, 0] =  1 / 2 * dt * (math.cos(delta_f) * math.cos(theta) - math.sin(delta_f) * math.sin(theta))
-        B[0, 1] = -1 / 2 * dt * (math.sin(delta_f) * math.cos(theta) + math.cos(delta_f) * math.sin(theta)) * v_f
-        B[0, 2] =  1 / 2 * dt * (math.cos(delta_r) * math.cos(theta) - math.sin(delta_r) * math.sin(theta))
-        B[0, 3] = -1 / 2 * dt * (math.sin(delta_r) * math.cos(theta) + math.cos(delta_r) * math.sin(theta)) * v_r
-        B[1, 0] =  1 / 2 * dt * (math.cos(delta_f) * math.sin(theta) + math.sin(delta_f) * math.cos(theta))
-        B[1, 1] = -1 / 2 * dt * (math.sin(delta_f) * math.sin(theta) - math.cos(delta_f) * math.cos(theta)) * v_f
-        B[1, 2] =  1 / 2 * dt * (math.cos(delta_r) * math.sin(theta) + math.sin(delta_r) * math.cos(theta))
-        B[1, 3] = -1 / 2 * dt * (math.sin(delta_r) * math.cos(theta) - math.cos(delta_r) * math.sin(theta)) * v_r
-        B[2, 0] = -1 / self.wheel_base_ * dt * math.sin(delta_r)
-        B[2, 1] = -1 / self.wheel_base_ * dt * math.cos(delta_f) * v_f 
-        B[2, 2] = -1 / self.wheel_base_ * dt * math.sin(delta_r)
-        B[2, 3] = -1 / self.wheel_base_ * dt * math.cos(delta_r) * v_r
+        B[0, 0] =  1 / 2 * self.DT_ * (math.cos(delta_f) * math.cos(theta) - math.sin(delta_f) * math.sin(theta))
+        B[0, 1] = -1 / 2 * self.DT_ * (math.sin(delta_f) * math.cos(theta) + math.cos(delta_f) * math.sin(theta)) * v_f
+        B[0, 2] =  1 / 2 * self.DT_ * (math.cos(delta_r) * math.cos(theta) - math.sin(delta_r) * math.sin(theta))
+        B[0, 3] = -1 / 2 * self.DT_ * (math.sin(delta_r) * math.cos(theta) + math.cos(delta_r) * math.sin(theta)) * v_r
+        B[1, 0] =  1 / 2 * self.DT_ * (math.cos(delta_f) * math.sin(theta) + math.sin(delta_f) * math.cos(theta))
+        B[1, 1] = -1 / 2 * self.DT_ * (math.sin(delta_f) * math.sin(theta) - math.cos(delta_f) * math.cos(theta)) * v_f
+        B[1, 2] =  1 / 2 * self.DT_ * (math.cos(delta_r) * math.sin(theta) + math.sin(delta_r) * math.cos(theta))
+        B[1, 3] = -1 / 2 * self.DT_ * (math.sin(delta_r) * math.cos(theta) - math.cos(delta_r) * math.sin(theta)) * v_r
+        B[2, 0] = -1 / self.wheel_base_ * self.DT_ * math.sin(delta_r)
+        B[2, 1] = -1 / self.wheel_base_ * self.DT_ * math.cos(delta_f) * v_f 
+        B[2, 2] = -1 / self.wheel_base_ * self.DT_ * math.sin(delta_r)
+        B[2, 3] = -1 / self.wheel_base_ * self.DT_ * math.cos(delta_r) * v_r
         # Define C
-        C[0] = 1 / 2 * dt * (v_f * math.cos(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.cos(delta_r) * math.sin(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.cos(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.cos(theta) * (delta_r + theta))
-        C[1] = 1 / 2 * dt * (-v_f * math.cos(delta_f) * math.cos(theta) * (delta_f + theta) - v_r * math.cos(delta_r) * math.cos(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.sin(theta) * (delta_r + theta))
-        C[2] = 1 / self.wheel_base_ * dt * (-math.cos(delta_f) * delta_f * v_f + math.cos(delta_r) * delta_r * v_r)
+        C[0] = 1 / 2 * self.DT_ * (v_f * math.cos(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.cos(delta_r) * math.sin(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.cos(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.cos(theta) * (delta_r + theta))
+        C[1] = 1 / 2 * self.DT_ * (-v_f * math.cos(delta_f) * math.cos(theta) * (delta_f + theta) - v_r * math.cos(delta_r) * math.cos(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.sin(theta) * (delta_r + theta))
+        C[2] = 1 / self.wheel_base_ * self.DT_ * (-math.cos(delta_f) * delta_f * v_f + math.cos(delta_r) * delta_r * v_r)
         
         return A, B, C
   
