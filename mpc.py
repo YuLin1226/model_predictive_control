@@ -35,10 +35,8 @@ class ModelPredictiveControl:
         self.NX_ = 3 # Number of design variables: x, y, yaw
         self.NU_ = 4 # Number of control inputs: front steer & speed, rear steer & speed
 
-        self.R_steer_ = np.diag([0.01, 0.01])
-        self.R_steer_diff_ = np.diag([0.01, 0.01])
-        self.R_speed_ = np.diag([0.01, 0.01])
-        self.R_speed_diff_ = np.diag([0.01, 0.01])
+        self.R_ = np.diag([0.01, 0.01, 0.01, 0.01])
+        self.R_diff_ = np.diag([0.01, 0.01, 0.01, 0.01])
         self.Q_ = np.diag([0.01, 0.01, 0.01])
         self.Q_final_ = np.diag([0.01, 0.01, 0.01])
 
@@ -54,8 +52,6 @@ class ModelPredictiveControl:
         self.isReferenceRetrived_ = False
         self.reference_ = None
         self.trim_dist_ = 1
-
-
 
     def initialization(self, wheel_base, file_name):
 
@@ -118,41 +114,37 @@ class ModelPredictiveControl:
         u_predicted : array, size (NU,   HL)  
         """
         x = cvxpy.Variable((self.NX_, self.HL_ + 1))
-        u_steer = cvxpy.Variable((int(self.NU_/2), self.HL_))
-        u_speed = cvxpy.Variable((int(self.NU_/2), self.HL_))
+        u = cvxpy.Variable((int(self.NU_), self.HL_))
 
         cost = 0.0
         constraints = []
 
         for t in range(self.HL_):
-            cost += cvxpy.quad_form(u_steer[:, t], self.R_steer_)
-            cost += cvxpy.quad_form(u_speed[:, t], self.R_speed_)
+            cost += cvxpy.quad_form(u[:, t], self.R_)
 
             if t != 0:
                 cost += cvxpy.quad_form(x_ref[:, t] - x[:, t], self.Q_)
 
-            A, B = self.getRobotModelMatrice(x=x_predicted[:, t])
-            V = self.getControlMatrixFromPrediction(front_steer=u_predicted[1, t], rear_steer=u_predicted[3, t])
+            A, B, C = self.getRobotModelMatrice()
         
-            constraints += [x[:, t + 1] == A @ x[:, t] + B @ V @ u_speed[:, t]]
+            constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
             if t == 0:
-                constraints += [cvxpy.abs(u_steer[0, t] - u_predicted[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
-                constraints += [cvxpy.abs(u_steer[1, t] - u_predicted[3, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+                constraints += [cvxpy.abs(u[0, t] - u_predicted[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+                constraints += [cvxpy.abs(u[1, t] - u_predicted[3, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
                 
             if t < (self.HL_ - 1):
-                cost += cvxpy.quad_form(u_steer[:, t + 1] - u_steer[:, t], self.R_steer_diff_)
-                cost += cvxpy.quad_form(u_speed[:, t + 1] - u_speed[:, t], self.R_speed_diff_)
-                constraints += [cvxpy.abs(u_steer[0, t+1] - u_steer[0, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
-                constraints += [cvxpy.abs(u_steer[1, t+1] - u_steer[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+                cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], self.R_diff_)
+                constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+                constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
                 
         cost += cvxpy.quad_form(x_ref[:, self.HL_] - x[:, self.HL_], self.Q_final_)
 
         x0 = [x_current[0,0], x_current[1,0], x_current[2,0]]
 
         constraints += [x[:, 0] == x0]
-        constraints += [cvxpy.abs(u_speed[0, :]) <= self.MAX_TRAVEL_SPEED_]
-        constraints += [cvxpy.abs(u_speed[1, :]) <= self.MAX_TRAVEL_SPEED_]
+        constraints += [cvxpy.abs(u[0, :]) <= self.MAX_TRAVEL_SPEED_]
+        constraints += [cvxpy.abs(u[2, :]) <= self.MAX_TRAVEL_SPEED_]
 
         prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
         prob.solve(solver=cvxpy.ECOS, verbose=False)
@@ -161,10 +153,10 @@ class ModelPredictiveControl:
             optimized_x   = np.array(x.value[0, :]).flatten() # this is only used in Plotting.
             optimized_y   = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
             optimized_yaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
-            optimized_front_speed = np.array(u_speed.value[0, :]).flatten()
-            optimized_rear_speed  = np.array(u_speed.value[1, :]).flatten()
-            optimized_front_steer = np.array(u_steer.value[0, :]).flatten()
-            optimized_rear_steer  = np.array(u_steer.value[1, :]).flatten()
+            optimized_front_speed = np.array(u.value[0, :]).flatten()
+            optimized_front_steer = np.array(u.value[1, :]).flatten()
+            optimized_rear_speed  = np.array(u.value[2, :]).flatten()
+            optimized_rear_steer  = np.array(u.value[3, :]).flatten()
 
         else:
             print("Error: Cannot solve mpc..")
@@ -313,17 +305,7 @@ class ModelPredictiveControl:
         C[2] = 1 / self.wheel_base_ * dt * (-math.cos(delta_f) * delta_f * v_f + math.cos(delta_r) * delta_r * v_r)
         
         return A, B, C
-
-    def getControlMatrixFromPrediction(self, front_steer, rear_steer):
-
-        V = np.zeros((4, 2))
-        V[0, 0] = math.cos(front_steer)
-        V[1, 0] = math.sin(front_steer)
-        V[2, 1] = math.cos(rear_steer)
-        V[3, 1] = math.sin(rear_steer)
-    
-        return V
-    
+  
     def predictMotion(self, x_ref, x_current, control_input):
         
         """
