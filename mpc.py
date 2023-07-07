@@ -42,7 +42,7 @@ class ModelPredictiveControl:
 
         self.LOOKAHEAD_DIST_ = 1
         self.MAX_TRAVEL_SPEED_ = 0.5
-        self.MAX_STEER_SPEED_ = 0.5
+        self.MAX_STEER_SPEED_ = 1
         self.MAX_STEER_ = 3.14
         self.DT_ = 0.1
 
@@ -53,6 +53,8 @@ class ModelPredictiveControl:
         self.isReferenceRetrived_ = False
         self.reference_ = None
         self.trim_dist_ = 1
+
+        self.control_input_ = None
 
     def initialization(self, wheel_base, file_name):
 
@@ -69,12 +71,9 @@ class ModelPredictiveControl:
             print("Error: Reference hasn't been retrived.")
             return False
             
-        self.control_input_ = []
-        if not self.control_input_:
-            for i in range(self.HL_):
-                self.control_input_.append(
-                    [0.01, 0, 0.01, 0]
-                )
+        
+        if self.control_input_ is None:
+            self.control_input_ = np.zeros((self.NU_, self.HL_))
 
         for i in range(self.ITERATION_TIMES_):
             x_current = self.updateCurrentState(x=current_pos_x, y=current_pos_y, yaw=current_pos_yaw)
@@ -87,14 +86,15 @@ class ModelPredictiveControl:
                 x_ref=x_ref,
                 x_current=x_current,
                 x_predicted=x_predicted,
-                u_predicted=np.array(self.control_input_).transpose()
+                u_predicted=self.control_input_
             )
 
-            self.control_input_ = []
             for i in range(self.HL_):
-                self.control_input_.append(
-                    [opt_front_speed[i], opt_front_steer[i], opt_rear_speed[i], opt_rear_steer[i]]
-                )
+                
+                self.control_input_[0, i] = opt_front_speed[i]
+                self.control_input_[1, i] = opt_front_steer[i]
+                self.control_input_[2, i] = opt_rear_speed[i]
+                self.control_input_[3, i] = opt_rear_steer[i]
 
             output_v = self.getVelocitiesFromRobotModels(
                         front_speed=opt_front_speed[0],
