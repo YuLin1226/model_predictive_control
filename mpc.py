@@ -129,7 +129,7 @@ class ModelPredictiveControl:
                                                 v_f=u_predicted[0, t],
                                                 delta_f=u_predicted[1, t],
                                                 v_r=u_predicted[2, t],
-                                                delta_f=u_predicted[3, t])
+                                                delta_r=u_predicted[3, t])
         
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
