@@ -283,23 +283,36 @@ class ModelPredictiveControl:
         x_current[2, 0] = yaw
         return x_current
     
-    def getRobotModelMatrice(self, x):
+    def getRobotModelMatrice(self, theta, v_f, delta_f, v_r, delta_r, dt):
 
         A = np.zeros((self.NX_, self.NX_))
+        B = np.zeros((self.NX_, self.NU_))
+        C = np.zeros(self.NX_)
+        # Define A
         A[0, 0] = 1.0
         A[1, 1] = 1.0
         A[2, 2] = 1.0
-
-        B = np.zeros((3, 3))
-        B[0, 0] = math.cos(x[2])
-        B[0, 1] = math.sin(x[2]) * (-1)
-        B[1, 0] = math.sin(x[2])
-        B[1, 1] = math.cos(x[2])
-        B[2, 2] = 1
-
-        B = B @ self.kinematical_matrix_ 
-
-        return A, B
+        A[0, 2] = -0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta) -0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta)
+        A[1, 2] = 0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta) -0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta)
+        # Define B
+        B[0, 0] =  1 / 2 * dt * (math.cos(delta_f) * math.cos(theta) - math.sin(delta_f) * math.sin(theta))
+        B[0, 1] = -1 / 2 * dt * (math.sin(delta_f) * math.cos(theta) + math.cos(delta_f) * math.sin(theta)) * v_f
+        B[0, 2] =  1 / 2 * dt * (math.cos(delta_r) * math.cos(theta) - math.sin(delta_r) * math.sin(theta))
+        B[0, 3] = -1 / 2 * dt * (math.sin(delta_r) * math.cos(theta) + math.cos(delta_r) * math.sin(theta)) * v_r
+        B[1, 0] =  1 / 2 * dt * (math.cos(delta_f) * math.sin(theta) + math.sin(delta_f) * math.cos(theta))
+        B[1, 1] = -1 / 2 * dt * (math.sin(delta_f) * math.sin(theta) - math.cos(delta_f) * math.cos(theta)) * v_f
+        B[1, 2] =  1 / 2 * dt * (math.cos(delta_r) * math.sin(theta) + math.sin(delta_r) * math.cos(theta))
+        B[1, 3] = -1 / 2 * dt * (math.sin(delta_r) * math.cos(theta) - math.cos(delta_r) * math.sin(theta)) * v_r
+        B[2, 0] = -1 / self.wheel_base_ * dt * math.sin(delta_r)
+        B[2, 1] = -1 / self.wheel_base_ * dt * math.cos(delta_f) * v_f 
+        B[2, 2] = -1 / self.wheel_base_ * dt * math.sin(delta_r)
+        B[2, 3] = -1 / self.wheel_base_ * dt * math.cos(delta_r) * v_r
+        # Define C
+        C[0] = 1 / 2 * dt * (v_f * math.cos(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.cos(delta_r) * math.sin(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.cos(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.cos(theta) * (delta_r + theta))
+        C[1] = 1 / 2 * dt * (-v_f * math.cos(delta_f) * math.cos(theta) * (delta_f + theta) - v_r * math.cos(delta_r) * math.cos(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.sin(theta) * (delta_r + theta))
+        C[2] = 1 / self.wheel_base_ * dt * (-math.cos(delta_f) * delta_f * v_f + math.cos(delta_r) * delta_r * v_r)
+        
+        return A, B, C
 
     def getControlMatrixFromPrediction(self, front_steer, rear_steer):
 
@@ -340,6 +353,8 @@ class ModelPredictiveControl:
             x_predicted[2, i+1] = x_predicted[2, i] + V[2] * self.DT_
 
         return x_predicted
+
+
 
 
 if __name__ == '__main__' :
