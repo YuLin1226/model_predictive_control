@@ -43,6 +43,7 @@ class ModelPredictiveControl:
         self.LOOKAHEAD_DIST_ = 1
         self.MAX_TRAVEL_SPEED_ = 0.5
         self.MAX_STEER_SPEED_ = 0.5
+        self.MAX_STEER_ = 3.14
         self.DT_ = 0.1
 
         self.isModelParameterRetrived_ = False
@@ -72,13 +73,15 @@ class ModelPredictiveControl:
         if not self.control_input_:
             for i in range(self.HL_):
                 self.control_input_.append(
-                    [0, 0, 0, 0]
+                    [0.01, 0, 0.01, 0]
                 )
 
         for i in range(self.ITERATION_TIMES_):
             x_current = self.updateCurrentState(x=current_pos_x, y=current_pos_y, yaw=current_pos_yaw)
             x_ref = self.getReferenceTrajectoryWithinHorizon(x_current=x_current)
             x_predicted = self.predictMotion(x_ref=x_ref, x_current=x_current, control_input=self.control_input_)
+
+            print(self.control_input_, '\n')
 
             opt_x, opt_y, opt_yaw, opt_front_speed, opt_front_steer, opt_rear_speed, opt_rear_steer = self.controlLaw(
                 x_ref=x_ref,
@@ -114,13 +117,13 @@ class ModelPredictiveControl:
         u_predicted : array, size (NU,   HL)  
         """
         x = cvxpy.Variable((self.NX_, self.HL_ + 1))
-        u = cvxpy.Variable((int(self.NU_), self.HL_))
+        u = cvxpy.Variable((self.NU_, self.HL_))
 
         cost = 0.0
         constraints = []
 
         for t in range(self.HL_):
-            cost += cvxpy.quad_form(u[:, t], self.R_)
+            # cost += cvxpy.quad_form(u[:, t], self.R_)
 
             if t != 0:
                 cost += cvxpy.quad_form(x_ref[:, t] - x[:, t], self.Q_)
@@ -133,10 +136,14 @@ class ModelPredictiveControl:
         
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
-            # if t == 0:
-            #     constraints += [cvxpy.abs(u[1, t] - u_predicted[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
-            #     constraints += [cvxpy.abs(u[3, t] - u_predicted[3, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
-                
+            if t == 0:
+                constraints += [cvxpy.abs(u[1, t] - u_predicted[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+                constraints += [cvxpy.abs(u[3, t] - u_predicted[3, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
+
+            constraints += [u[0, t] == u[2, t]]
+            constraints += [u[1, t] == -u[3, t]]
+            constraints += [cvxpy.abs(u[1, t]) <= self.MAX_STEER_]
+            constraints += [cvxpy.abs(u[3, t]) <= self.MAX_STEER_]
             if t < (self.HL_ - 1):
                 cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], self.R_diff_)
                 constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.MAX_STEER_SPEED_ * self.DT_]
