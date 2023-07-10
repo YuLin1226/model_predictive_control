@@ -42,7 +42,7 @@ class ModelPredictiveControl:
 
         self.LOOKAHEAD_DIST_ = 1
         self.MAX_TRAVEL_SPEED_ = 0.5
-        self.MAX_STEER_SPEED_ = 1
+        self.MAX_STEER_SPEED_ = 3
         self.MAX_STEER_ = 3.14
         self.DT_ = 0.1
 
@@ -53,13 +53,18 @@ class ModelPredictiveControl:
         self.isReferenceRetrived_ = False
         self.reference_ = None
         self.trim_dist_ = 1
+        self.pts_x_ = []
+        self.pts_y_ = []
+        self.pts_yaw_ = []
 
         self.control_input_ = None
+        self.predict_state_ = []
 
     def initialization(self, wheel_base, file_name):
 
         self.setRobotModelParameters(wheel_base=wheel_base)
         self.retriveReferenceFromCSV(file_name=file_name)
+        self.interpolateReference()
 
     def start(self, current_pos_x, current_pos_y, current_pos_yaw):
         
@@ -71,8 +76,8 @@ class ModelPredictiveControl:
             print("Error: Reference hasn't been retrived.")
             return False
             
-        
         if self.control_input_ is None:
+            print("control input is NONE")
             self.control_input_ = np.zeros((self.NU_, self.HL_))
 
         for i in range(self.ITERATION_TIMES_):
@@ -232,7 +237,67 @@ class ModelPredictiveControl:
         self.isReferenceRetrived_ = True
         self.reference_ = node_lists
     
+    def interpolateReference(self):
+
+        for i in range(len(self.reference_) - 1):
+            vx = self.reference_[i+1][3]
+            vy = self.reference_[i+1][4]
+            w  = self.reference_[i+1][5]
+
+            if w == 0:
+                continue
+
+            from_node = self.reference_[i]
+            to_node   = self.reference_[i+1]
+            
+            for i in range(10):
+
+                icr = [-vy / w, vx / w]
+                yaw = from_node[2] + (to_node[2] - from_node[2]) / 10 * i
+                x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
+                y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
+                self.pts_x_.append(x)
+                self.pts_y_.append(y)
+                self.pts_yaw_.append(yaw)
+
+            self.pts_x_.append(to_node[0])
+            self.pts_y_.append(to_node[1])
+            self.pts_yaw_.append(to_node[2])
+
     def getReferenceTrajectoryWithinHorizon(self, x_current):
+
+        if not self.isReferenceRetrived_:
+            return None
+        
+        # Prune already passed path.
+        idx = 0
+        toPrune = False
+
+        for i in range(len(self.pts_x_)):
+            
+            x = self.pts_x_[i]
+            y = self.pts_y_[i]
+
+            dist = math.sqrt((x_current[0] - x)**2 + (x_current[1] - y)**2)
+            if dist < self.trim_dist_:
+                toPrune = True
+                idx = i
+
+        if toPrune:
+            del self.pts_x_[:idx+1]
+            del self.pts_y_[:idx+1]
+            del self.pts_yaw_[:idx+1]
+
+        # Prepare ref path
+        x_ref = np.zeros((self.NX_, self.HL_ + 1))
+        for i in range(self.HL_ + 1):
+            x_ref[0, i] = self.pts_x_[i]
+            x_ref[1, i] = self.pts_y_[i]
+            x_ref[2, i] = self.pts_yaw_[i]
+        
+        return x_ref
+
+    def getReferenceTrajectoryWithLookAheadDistance(self, x_current):
 
         if not self.isReferenceRetrived_:
             return None
@@ -332,18 +397,25 @@ class ModelPredictiveControl:
         x_predicted[1, 0] = x_current[1, 0]
         x_predicted[2, 0] = x_current[2, 0]
         # predict future state 
-        for i in range(len(control_input)):
+        for i in range(self.HL_):
 
             V = self.getVelocitiesFromRobotModels(
-                front_speed=control_input[i][0], 
-                front_steer=control_input[i][1], 
-                rear_speed=control_input[i][2],
-                rear_steer=control_input[i][3] 
+                front_speed=control_input[0, i], 
+                front_steer=control_input[1, i], 
+                rear_speed=control_input[2, i],
+                rear_steer=control_input[3, i] 
             )
             
-            x_predicted[0, i+1] = x_predicted[0, i] + V[0] * math.cos(x_predicted[2, i]) * self.DT_ - V[1] * math.sin(x_predicted[2, i]) * self.DT_
-            x_predicted[1, i+1] = x_predicted[1, i] + V[0] * math.sin(x_predicted[2, i]) * self.DT_ + V[1] * math.cos(x_predicted[2, i]) * self.DT_
-            x_predicted[2, i+1] = x_predicted[2, i] + V[2] * self.DT_
+            x = x_predicted[0, i] + V[0] * math.cos(x_predicted[2, i]) * self.DT_ - V[1] * math.sin(x_predicted[2, i]) * self.DT_
+            y = x_predicted[1, i] + V[0] * math.sin(x_predicted[2, i]) * self.DT_ + V[1] * math.cos(x_predicted[2, i]) * self.DT_
+            yaw = x_predicted[2, i] + V[2] * self.DT_
+
+            x_predicted[0, i+1] = x[0]
+            x_predicted[1, i+1] = y[0]
+            x_predicted[2, i+1] = yaw[0]
+
+            # if i == 0:
+            self.predict_state_.append([x[0], y[0], yaw[0]])
 
         return x_predicted
 
