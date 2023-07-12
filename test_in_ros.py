@@ -107,6 +107,19 @@ class Planner:
                     ])
         
 
+        print("Save prediction as csv.")
+        with open('prediction.csv', 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['X', 'Y', 'YAW'])
+
+            for node in self.mpc_.predict_state_:
+                writer.writerow([ 
+                    node[0], 
+                    node[1],
+                    node[2]
+                    ])
+
+
 
 
 if __name__ == '__main__' :
