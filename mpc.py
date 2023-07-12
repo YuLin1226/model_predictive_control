@@ -31,14 +31,14 @@ class ModelPredictiveControl:
     def __init__(self) -> None:
         
         self.ITERATION_TIMES_ = 1
-        self.HL_ = 5 # Horizon length
+        self.HL_ = 10 # Horizon length
         self.NX_ = 3 # Number of design variables: x, y, yaw
         self.NU_ = 4 # Number of control inputs: front steer & speed, rear steer & speed
 
-        self.R_ = np.diag([0.01, 0.01, 0.01, 0.01])
-        self.R_diff_ = np.diag([0.01, 0.01, 0.01, 0.01])
-        self.Q_ = np.diag([0.01, 0.01, 0.01])
-        self.Q_final_ = np.diag([0.01, 0.01, 0.01])
+        self.R_ = np.diag([0.001, 0.001, 0.001, 0.001])
+        self.R_diff_ = np.diag([0.001, 0.001, 0.001, 0.001])
+        self.Q_ = np.diag([0.1, 0.1, 0.1])
+        self.Q_final_ = np.diag([0.1, 0.1, 0])
 
         self.LOOKAHEAD_DIST_ = 1
         self.MAX_TRAVEL_SPEED_ = 0.5
@@ -128,7 +128,7 @@ class ModelPredictiveControl:
         constraints = []
 
         for t in range(self.HL_):
-            # cost += cvxpy.quad_form(u[:, t], self.R_)
+            cost += cvxpy.quad_form(u[:, t], self.R_)
 
             if t != 0:
                 cost += cvxpy.quad_form(x_ref[:, t] - x[:, t], self.Q_)
@@ -417,6 +417,7 @@ class ModelPredictiveControl:
             # if i == 0:
             self.predict_state_.append([x[0], y[0], yaw[0]])
 
+        print("Prediction\n",x_predicted)
         return x_predicted
 
 
