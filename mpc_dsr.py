@@ -17,12 +17,12 @@ sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 import cubic_spline_planner
 
 NX = 3  
-NU = 2
+NU = 4
 T = 5  # horizon length
 
 # mpc parameters
-R = np.diag([0.01, 0.01])  # input cost matrix
-Rd = np.diag([0.01, 0.01])  # input difference cost matrix
+R = np.diag([0.01, 0.01, 0.01, 0.01])  # input cost matrix
+Rd = np.diag([0.01, 0.01, 0.01, 0.01])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
 GOAL_DIS = 1.5  # goal distance
@@ -55,11 +55,12 @@ class State:
     vehicle state class
     """
 
-    def __init__(self, x=0.0, y=0.0, yaw=0.0, vx=0.0, w=0.0):
+    def __init__(self, x=0.0, y=0.0, yaw=0.0, vx=0.0, vy=0.0, w=0.0):
         self.x = x
         self.y = y
         self.yaw = yaw
         self.vx = vx
+        self.vy = vy
         self.w = w
         self.predelta = None
 
@@ -170,32 +171,35 @@ def transfrom_gbm_command(vf, vr, sf, sr, wheel_base=1):
     return vx, vy, w
 
 
-def iterative_linear_mpc_control(xref, x0, ov, ow):
+def iterative_linear_mpc_control(xref, x0, ovf, ovr, osf, osr):
     """
     MPC control with updating operational point iteratively
     """
     ox, oy, oyaw = None, None, None
 
-    if ov is None or ow is None:
-        ov = [0.3] * T
-        ow = [0.0] * T
+    if ovf is None or ovr is None or osf is None or osr is None:
+        ovf = [0.0] * T
+        ovr = [0.0] * T
+        osf = [0.0] * T
+        osr = [0.0] * T
 
     uref = np.zeros((NU, T))
 
     for i in range(MAX_ITER):
-        xbar = predict_motion(x0, ov, ow, xref)
-        print("xbar", xbar)
-        print("xref", xref)
-        for i in range(T):
-            uref[0, i] = ov[i]
-            uref[1, i] = ow[i]
+        xbar = predict_motion(x0, ovf, ovr, osf, osr, xref)
 
-        ov, ow, ox, oy, oyaw = linear_mpc_control(xref, xbar, x0, uref)
+        for i in range(T):
+            uref[0, i] = ovf[i]
+            uref[1, i] = ovr[i]
+            uref[2, i] = osf[i]
+            uref[3, i] = osr[i]
+            
+        ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control(xref, xbar, x0, uref)
         
     else:
         print("Iterative is max iter")
 
-    return ov, ow, ox, oy, oyaw
+    return ovf, ovr, osf, osr, ox, oy, oyaw
 
 
 def linear_mpc_control(xref, xbar, x0, uref):
@@ -212,20 +216,24 @@ def linear_mpc_control(xref, xbar, x0, uref):
         if t != 0:
             cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
 
-        A, B, C = get_linear_model_matrix(vr=uref[0, t], theta_r=xbar[2, t])
+        A, B, C = get_linear_model_matrix(
+            theta=xbar[2, t],
+            v_f=uref[0, t],
+            v_r=uref[1, t],
+            delta_f=uref[2, t],
+            delta_r=uref[3, t])
     
-        # constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t]]
         constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
         if t < (T - 1):
             constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED]
-            constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_W_SPEED]
+            constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_V_SPEED]
 
 
     cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
 
     constraints += [x[:, 0] == x0]
     constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
-    constraints += [cvxpy.abs(u[1, :]) <= MAX_W_SPEED]
+    constraints += [cvxpy.abs(u[1, :]) <= MAX_V_SPEED]
 
     prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
     prob.solve(solver=cvxpy.ECOS, verbose=False)
@@ -234,18 +242,22 @@ def linear_mpc_control(xref, xbar, x0, uref):
         ox   = np.array(x.value[0, :]).flatten() # this is only used in Plotting.
         oy   = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
         oyaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
-        ov = np.array(u.value[0, :]).flatten()
-        ow = np.array(u.value[1, :]).flatten()
+        ovf = np.array(u.value[0, :]).flatten()
+        ovr = np.array(u.value[1, :]).flatten()
+        osf = np.array(u.value[2, :]).flatten()
+        osr = np.array(u.value[3, :]).flatten()
 
     else:
         print("Error: Cannot solve mpc..")
         ox = None
         oy = None
         oyaw = None
-        ov = None
-        ow = None
+        ovf = None
+        ovr = None
+        osf = None
+        osr = None
 
-    return ov, ow, ox, oy, oyaw
+    return ovf, ovr, osf, osr, ox, oy, oyaw
 
 
 # def get_linear_model_matrix(vr, theta_r):
@@ -268,7 +280,7 @@ def linear_mpc_control(xref, xbar, x0, uref):
 
 #     return A, B, C
 
-def get_linear_model_matrix(theta, v_f, delta_f, v_r, delta_r, wheel_base):
+def get_linear_model_matrix(theta, v_f, delta_f, v_r, delta_r, wheel_base=1):
 
     # Define A
     A = np.zeros((NX, NX))
@@ -406,12 +418,13 @@ def do_simulation(cx, cy, cyaw, dl, initial_state):
     y = [state.y]
     yaw = [state.yaw]
     vx = [state.vx]
+    vy = [state.vy]
     w = [state.w]
 
     t = [0.0]
     target_ind, _ = calc_nearest_index(state, cx, cy, cyaw, 0)
 
-    ov, ow = None, None
+    ovf, ovr, osf, osr = None, None, None, None
 
     cyaw = smooth_yaw(cyaw)
 
@@ -424,12 +437,13 @@ def do_simulation(cx, cy, cyaw, dl, initial_state):
 
         x0 = [state.x, state.y, state.yaw]  # current state
 
-        ov, ow, ox, oy, oyaw = iterative_linear_mpc_control(
-            xref, x0, ov, ow)
+        ovf, ovr, osf, osr, ox, oy, oyaw = iterative_linear_mpc_control(
+            xref, x0, ovf, ovr, osf, osr)
 
-        if ov is not None:
-            vi, wi = ov[0], ow[0]
-            state = update_state(state, vi, wi)
+        if ovf is not None:
+            vfi, vri, sfi, sri = ovf[0], ovr[0], osf[0], osr[0]
+            vxi, vyi, wi = transfrom_gbm_command(vfi, vri, sfi, sri)
+            state = update_state(state, vxi, vyi, wi)
             
         time = time + DT
 
@@ -437,6 +451,7 @@ def do_simulation(cx, cy, cyaw, dl, initial_state):
         y.append(state.y)
         yaw.append(state.yaw)
         vx.append(state.vx)
+        vy.append(state.vy)
         w.append(state.w)
         t.append(time)
 
