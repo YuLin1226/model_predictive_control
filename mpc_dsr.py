@@ -89,15 +89,6 @@ def plot_car(x, y, yaw, cabcolor="-r", truckcolor="-k"):
              np.array(outline[1, :]).flatten(), truckcolor)
 
 
-def update_state(state, v, w):
-
-    state.x = state.x + v * math.cos(state.yaw) * DT
-    state.y = state.y + v * math.sin(state.yaw) * DT
-    state.yaw = state.yaw + w * DT
-    state.vx = v
-    state.w = w
-
-    return state
 
 
 def calc_nearest_index(state, cx, cy, cyaw, pind):
@@ -122,21 +113,61 @@ def calc_nearest_index(state, cx, cy, cyaw, pind):
 
     return ind, mind
 
+def update_state(state, vx, vy, w):
 
-def predict_motion(x0, v, w, xref):
+    state.x = state.x + vx * math.cos(state.yaw) * DT - vy * math.sin(state.yaw) * DT
+    state.y = state.y + vx * math.sin(state.yaw) * DT + vy * math.cos(state.yaw) * DT
+    state.yaw = state.yaw + w * DT
+    state.vx = vx
+    state.vy = vy
+    state.w = w
+
+    return state
+
+def predict_motion(x0, vf, vr, sf, sr, xref):
     
     xbar = xref * 0.0
     for i, _ in enumerate(x0):
         xbar[i, 0] = x0[i]
 
     state = State(x=x0[0], y=x0[1], yaw=x0[2])
-    for (vi, wi, i) in zip(v, w, range(1, T + 1)):
-        state = update_state(state, vi, wi)
+    for (vfi, vri, sfi, sri, i) in zip(vf, vr, sf, sr, range(1, T + 1)):
+        vx, vy, w = transfrom_gbm_command(vfi, vri, sfi, sri)
+        state = update_state(state, vx, vy, w)
         xbar[0, i] = state.x
         xbar[1, i] = state.y
         xbar[2, i] = state.yaw
 
     return xbar
+
+
+def transfrom_gbm_command(vf, vr, sf, sr, wheel_base=1):
+
+    H = np.array([
+            [1, 0, 0],
+            [0, 1, wheel_base/2],
+            [1, 0, 0],
+            [0, 1, -wheel_base/2]
+        ])
+    km = np.linalg.inv((H.transpose() @ H)) @ H.transpose()
+
+    v1x = math.cos(sf) * vf
+    v1y = math.sin(sf) * vf
+    v2x = math.cos(sr) * vr
+    v2y = math.sin(sr) * vr
+    vo = np.array([
+        [v1x],
+        [v1y],
+        [v2x],
+        [v2y]
+    ])
+    vi = km @ vo
+
+    vx = float(vi[0])
+    vy = float(vi[1])
+    w = float(vi[2])
+
+    return vx, vy, w
 
 
 def iterative_linear_mpc_control(xref, x0, ov, ow):
@@ -217,24 +248,55 @@ def linear_mpc_control(xref, xbar, x0, uref):
     return ov, ow, ox, oy, oyaw
 
 
-def get_linear_model_matrix(vr, theta_r):
+# def get_linear_model_matrix(vr, theta_r):
 
+#     A = np.zeros((NX, NX))
+#     A[0, 0] = 1.0
+#     A[1, 1] = 1.0
+#     A[2, 2] = 1.0
+#     A[0, 2] = -vr * math.sin(theta_r) * DT
+#     A[1, 2] =  vr * math.cos(theta_r) * DT
+    
+#     B = np.zeros((NX, NU))
+#     B[0, 0] = math.cos(theta_r) * DT
+#     B[1, 0] = math.sin(theta_r) * DT
+#     B[2, 1] = DT
+
+#     C = np.zeros(NX)
+#     C[0] =  vr * math.sin(theta_r) * theta_r * DT
+#     C[1] = -vr * math.cos(theta_r) * theta_r * DT
+
+#     return A, B, C
+
+def get_linear_model_matrix(theta, v_f, delta_f, v_r, delta_r, wheel_base):
+
+    # Define A
     A = np.zeros((NX, NX))
     A[0, 0] = 1.0
     A[1, 1] = 1.0
     A[2, 2] = 1.0
-    A[0, 2] = -vr * math.sin(theta_r) * DT
-    A[1, 2] =  vr * math.cos(theta_r) * DT
-    
+    A[0, 2] = -0.5*DT*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta) -0.5*DT*(v_f*math.sin(delta_f)+v_r*math.sin(delta_r))*math.cos(theta)
+    A[1, 2] = 0.5*DT*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta) -0.5*DT*(v_f*math.sin(delta_f)+v_r*math.sin(delta_r))*math.sin(theta)
+    # Define B
     B = np.zeros((NX, NU))
-    B[0, 0] = math.cos(theta_r) * DT
-    B[1, 0] = math.sin(theta_r) * DT
-    B[2, 1] = DT
-
+    B[0, 0] =  1 / 2 * DT * (math.cos(delta_f) * math.cos(theta) - math.sin(delta_f) * math.sin(theta))
+    B[0, 1] = -1 / 2 * DT * (math.sin(delta_f) * math.cos(theta) + math.cos(delta_f) * math.sin(theta)) * v_f
+    B[0, 2] =  1 / 2 * DT * (math.cos(delta_r) * math.cos(theta) - math.sin(delta_r) * math.sin(theta))
+    B[0, 3] = -1 / 2 * DT * (math.sin(delta_r) * math.cos(theta) + math.cos(delta_r) * math.sin(theta)) * v_r
+    B[1, 0] =  1 / 2 * DT * (math.cos(delta_f) * math.sin(theta) + math.sin(delta_f) * math.cos(theta))
+    B[1, 1] = -1 / 2 * DT * (math.sin(delta_f) * math.sin(theta) - math.cos(delta_f) * math.cos(theta)) * v_f
+    B[1, 2] =  1 / 2 * DT * (math.cos(delta_r) * math.sin(theta) + math.sin(delta_r) * math.cos(theta))
+    B[1, 3] = -1 / 2 * DT * (math.sin(delta_r) * math.cos(theta) - math.cos(delta_r) * math.sin(theta)) * v_r
+    B[2, 0] =  1 / wheel_base * DT * math.sin(delta_r)
+    B[2, 1] =  1 / wheel_base * DT * math.cos(delta_f) * v_f 
+    B[2, 2] = -1 / wheel_base * DT * math.sin(delta_r)
+    B[2, 3] = -1 / wheel_base * DT * math.cos(delta_r) * v_r
+    # Define C
     C = np.zeros(NX)
-    C[0] =  vr * math.sin(theta_r) * theta_r * DT
-    C[1] = -vr * math.cos(theta_r) * theta_r * DT
-
+    C[0] = 1 / 2 * DT * (v_f * math.cos(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.cos(delta_r) * math.sin(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.cos(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.cos(theta) * (delta_r + theta))
+    C[1] = 1 / 2 * DT * (-v_f * math.cos(delta_f) * math.cos(theta) * (delta_f + theta) - v_r * math.cos(delta_r) * math.cos(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.sin(theta) * (delta_r + theta))
+    C[2] = 1 / wheel_base * DT * (-math.cos(delta_f) * delta_f * v_f + math.cos(delta_r) * delta_r * v_r)
+    
     return A, B, C
 
 
@@ -474,6 +536,7 @@ def main2():
     x, y, yaw = makeEightShapeTrajectory(400, 10)
     plt.plot(x, y, 'r.')
     plt.show()
+
 
 
 if __name__ == '__main__':
