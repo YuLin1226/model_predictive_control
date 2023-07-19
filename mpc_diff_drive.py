@@ -179,7 +179,7 @@ def linear_mpc_control(xref, xbar, x0, uref):
         cost += cvxpy.quad_form(u[:, t], R)
 
         if t != 0:
-            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q*(2**t))
+            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
 
         A, B, C = get_linear_model_matrix(vr=uref[0, t], theta_r=xbar[2, t])
     
@@ -358,7 +358,7 @@ def do_simulation(cx, cy, cyaw, dl, initial_state):
         #     state, cx, cy, cyaw, dl, target_ind)
 
         xref, target_ind = calc_ref_trajectory2(
-            state, cx, cy, cyaw, 3, target_ind)
+            state, cx, cy, cyaw, 2, target_ind)
 
         x0 = [state.x, state.y, state.yaw]  # current state
 
