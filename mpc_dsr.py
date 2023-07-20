@@ -195,7 +195,7 @@ def iterative_linear_mpc_control(xref, x0, ovf, ovr, osf, osr):
             uref[1, i] = osf[i]
             uref[3, i] = osr[i]
             
-        ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control(xref, xbar, x0, uref)
+        ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_ackermann(xref, xbar, x0, uref)
         
     else:
         print("Iterative is max iter")
@@ -203,7 +203,7 @@ def iterative_linear_mpc_control(xref, x0, ovf, ovr, osf, osr):
     return ovf, ovr, osf, osr, ox, oy, oyaw
 
 
-def linear_mpc_control(xref, xbar, x0, uref):
+def linear_mpc_control_ackermann(xref, xbar, x0, uref):
     
     x = cvxpy.Variable((NX, T + 1))
     u = cvxpy.Variable((NU, T))
@@ -271,6 +271,141 @@ def linear_mpc_control(xref, xbar, x0, uref):
 
     return ovf, ovr, osf, osr, ox, oy, oyaw
 
+def linear_mpc_control_crab(xref, xbar, x0, uref):
+    
+    x = cvxpy.Variable((NX, T + 1))
+    u = cvxpy.Variable((NU, T))
+
+    cost = 0.0
+    constraints = []
+
+    for t in range(T):
+        cost += cvxpy.quad_form(u[:, t], R)
+
+        if t != 0:
+            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
+
+        A, B, C = get_linear_model_matrix(
+            theta=xbar[2, t],
+            v_f=uref[0, t],
+            v_r=uref[2, t],
+            delta_f=uref[1, t],
+            delta_r=uref[3, t])
+    
+        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
+
+        if t < (T - 1):
+            constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED * DT]
+            constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= DIFF_V_SPEED * DT]
+            constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_STEER * DT]
+            constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= DIFF_STEER * DT]
+
+        if t == 0:
+            constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= DIFF_STEER * DT]
+            constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= DIFF_STEER * DT]
+
+
+    cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
+
+    constraints += [x[:, 0] == x0]
+    constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
+    constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
+    constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
+    constraints += [cvxpy.abs(u[3, :]) <= MAX_STEER]
+    constraints += [u[1, :] == -u[3, :]]
+    constraints += [u[0, :] == u[2, :]]
+
+    prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
+    prob.solve(solver=cvxpy.ECOS, verbose=False)
+
+    if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
+        ox   = np.array(x.value[0, :]).flatten() # this is only used in Plotting.
+        oy   = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
+        oyaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
+        ovf = np.array(u.value[0, :]).flatten()
+        ovr = np.array(u.value[2, :]).flatten()
+        osf = np.array(u.value[1, :]).flatten()
+        osr = np.array(u.value[3, :]).flatten()
+
+    else:
+        print("Error: Cannot solve mpc..")
+        ox = None
+        oy = None
+        oyaw = None
+        ovf = None
+        ovr = None
+        osf = None
+        osr = None
+
+    return ovf, ovr, osf, osr, ox, oy, oyaw
+
+def linear_mpc_control_diff(xref, xbar, x0, uref):
+    
+    x = cvxpy.Variable((NX, T + 1))
+    u = cvxpy.Variable((NU, T))
+
+    cost = 0.0
+    constraints = []
+
+    for t in range(T):
+        cost += cvxpy.quad_form(u[:, t], R)
+
+        if t != 0:
+            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
+
+        A, B, C = get_linear_model_matrix(
+            theta=xbar[2, t],
+            v_f=uref[0, t],
+            v_r=uref[2, t],
+            delta_f=uref[1, t],
+            delta_r=uref[3, t])
+    
+        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
+
+        if t < (T - 1):
+            constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED * DT]
+            constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= DIFF_V_SPEED * DT]
+            constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_STEER * DT]
+            constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= DIFF_STEER * DT]
+
+        if t == 0:
+            constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= DIFF_STEER * DT]
+            constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= DIFF_STEER * DT]
+
+
+    cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
+
+    constraints += [x[:, 0] == x0]
+    constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
+    constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
+    constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
+    constraints += [cvxpy.abs(u[3, :]) <= MAX_STEER]
+    constraints += [u[1, :] == -u[3, :]]
+    constraints += [u[0, :] == u[2, :]]
+
+    prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
+    prob.solve(solver=cvxpy.ECOS, verbose=False)
+
+    if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
+        ox   = np.array(x.value[0, :]).flatten() # this is only used in Plotting.
+        oy   = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
+        oyaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
+        ovf = np.array(u.value[0, :]).flatten()
+        ovr = np.array(u.value[2, :]).flatten()
+        osf = np.array(u.value[1, :]).flatten()
+        osr = np.array(u.value[3, :]).flatten()
+
+    else:
+        print("Error: Cannot solve mpc..")
+        ox = None
+        oy = None
+        oyaw = None
+        ovf = None
+        ovr = None
+        osf = None
+        osr = None
+
+    return ovf, ovr, osf, osr, ox, oy, oyaw
 
 def get_linear_model_matrix(theta, v_f, delta_f, v_r, delta_r, wheel_base=1):
 
