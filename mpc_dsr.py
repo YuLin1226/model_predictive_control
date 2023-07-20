@@ -44,8 +44,8 @@ WIDTH = 2.0  # [m]
 
 MAX_V_SPEED = 0.47  # maximum speed [m/s]
 DIFF_V_SPEED = 0.2
-MAX_STEER = np.deg2rad(60)
-DIFF_STEER = np.deg2rad(30)
+MAX_STEER = np.deg2rad(90)
+DIFF_STEER = np.deg2rad(45)
 
 
 
