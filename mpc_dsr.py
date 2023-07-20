@@ -74,7 +74,6 @@ def pi_2_pi(angle):
 
     return angle
 
-
 def plot_car(x, y, yaw, cabcolor="-r", truckcolor="-k"): 
     
     outline = np.array([[-LENGTH/2, LENGTH/2, LENGTH/2, -LENGTH/2, -LENGTH/2],
@@ -89,9 +88,6 @@ def plot_car(x, y, yaw, cabcolor="-r", truckcolor="-k"):
 
     plt.plot(np.array(outline[0, :]).flatten(),
              np.array(outline[1, :]).flatten(), truckcolor)
-
-
-
 
 def calc_nearest_index(state, cx, cy, cyaw, pind):
 
@@ -142,7 +138,6 @@ def predict_motion(x0, vf, vr, sf, sr, xref):
 
     return xbar
 
-
 def transfrom_gbm_command(vf, vr, sf, sr, wheel_base=1):
 
     H = np.array([
@@ -171,7 +166,6 @@ def transfrom_gbm_command(vf, vr, sf, sr, wheel_base=1):
 
     return vx, vy, w
 
-
 def iterative_linear_mpc_control(xref, x0, ovf, ovr, osf, osr):
     """
     MPC control with updating operational point iteratively
@@ -196,14 +190,13 @@ def iterative_linear_mpc_control(xref, x0, ovf, ovr, osf, osr):
             uref[3, i] = osr[i]
             
         # ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_ackermann(xref, xbar, x0, uref)
-        # ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_diff(xref, xbar, x0, uref)
-        ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_crab(xref, xbar, x0, uref)
+        ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_diff(xref, xbar, x0, uref)
+        # ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_crab(xref, xbar, x0, uref)
         
     else:
         print("Iterative is max iter")
 
     return ovf, ovr, osf, osr, ox, oy, oyaw
-
 
 def linear_mpc_control_ackermann(xref, xbar, x0, uref):
     
@@ -367,23 +360,15 @@ def linear_mpc_control_diff(xref, xbar, x0, uref):
         if t < (T - 1):
             constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED * DT]
             constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= DIFF_V_SPEED * DT]
-            constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_STEER * DT]
-            constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= DIFF_STEER * DT]
-
-        if t == 0:
-            constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= DIFF_STEER * DT]
-            constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= DIFF_STEER * DT]
-
 
     cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
 
     constraints += [x[:, 0] == x0]
     constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
     constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
-    constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
-    constraints += [cvxpy.abs(u[3, :]) <= MAX_STEER]
-    constraints += [u[1, :] == -u[3, :]]
-    constraints += [u[0, :] == u[2, :]]
+    constraints += [u[1, :] == MAX_STEER]
+    constraints += [u[3, :] == MAX_STEER]
+    
 
     prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
     prob.solve(solver=cvxpy.ECOS, verbose=False)
@@ -439,7 +424,6 @@ def get_linear_model_matrix(theta, v_f, delta_f, v_r, delta_r, wheel_base=1):
     C[2] = 1 / wheel_base * DT * (-math.cos(delta_f) * delta_f * v_f + math.cos(delta_r) * delta_r * v_r)
     
     return A, B, C
-
 
 def calc_ref_trajectory(state, cx, cy, cyaw, dl, pind):
     xref = np.zeros((NX, T + 1))
@@ -498,7 +482,6 @@ def calc_ref_trajectory2(state, cx, cy, cyaw, n_search_ind, pind):
 
     return xref, ind
 
-
 def check_goal(state, goal, tind, nind):
 
     # check goal
@@ -517,7 +500,6 @@ def check_goal(state, goal, tind, nind):
         return True
 
     return False
-
 
 def do_simulation(cx, cy, cyaw, dl, initial_state):
     """
@@ -606,7 +588,6 @@ def do_simulation(cx, cy, cyaw, dl, initial_state):
 
     return t, x, y, yaw, vx, w
 
-
 def smooth_yaw(yaw):
 
     for i in range(len(yaw) - 1):
@@ -621,7 +602,6 @@ def smooth_yaw(yaw):
             dyaw = yaw[i + 1] - yaw[i]
 
     return yaw
-
 
 def makeEightShapeTrajectory(n, size):
 
@@ -674,7 +654,6 @@ def main2():
     t, x, y, yaw, vx, w = do_simulation(
         cx, cy, cyaw, dl, initial_state)
 
-
 def main3():
 
     print(__file__ + " start!!")
@@ -682,6 +661,26 @@ def main3():
     dl = 0.5
 
     reference = retriveReferenceFromCSV('reference_crab.csv')
+
+    cx, cy, cyaw = interpolateReference(reference, 3, 'crab')
+    cx, cy, cyaw = removeRepeatedPoints(cx, cy, cyaw)
+
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    t, x, y, yaw, vx, w = do_simulation(
+        cx, cy, cyaw, dl, initial_state)
+
+def main4():
+
+    print(__file__ + " start!!")
+
+    dl = 0.5
+
+    reference = retriveReferenceFromCSV('reference_diff.csv')
 
     cx, cy, cyaw = interpolateReference(reference, 3, 'crab')
     cx, cy, cyaw = removeRepeatedPoints(cx, cy, cyaw)
@@ -717,7 +716,7 @@ def interpolateReference(node_lists, interpolate_num=5, mode='ackermann'):
 
     pts_x, pts_y, pts_yaw = [], [], []
 
-    if mode == 'ackermann':
+    if mode == 'ackermann' or mode == 'diff':
 
         for i in range(len(node_lists) - 1):
             vx = node_lists[i+1][3]
@@ -791,5 +790,6 @@ def removeRepeatedPoints(cx, cy, cyaw, epsilon=0.00001):
 if __name__ == '__main__':
     # main() # 8 shaped / Ackermann Mode
     # main2() # RRT / Ackermann Mode
-    main3() # RRT / Crab Mode
+    # main3() # RRT / Crab Mode
+    main4() # RRT / Diff Mode
     
