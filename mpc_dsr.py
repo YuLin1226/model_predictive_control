@@ -13,6 +13,7 @@ import math
 import numpy as np
 import sys
 import pathlib
+import csv
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 import cubic_spline_planner
 
@@ -33,7 +34,6 @@ MAX_TIME = 500.0  # max simulation time
 MAX_ITER = 1  # Max iteration
 DU_TH = 0.1  # iteration finish param
 
-TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
 N_IND_SEARCH = 10  # Search index number
 
 DT = 0.2  # [s] time tick
@@ -43,9 +43,10 @@ LENGTH = 4.5  # [m]
 WIDTH = 2.0  # [m]
 
 MAX_V_SPEED = 0.47  # maximum speed [m/s]
-MAX_W_SPEED = 3.77  # minimum speed [m/s]
 DIFF_V_SPEED = 0.2
-DIFF_W_SPEED = 1.0
+MAX_STEER = np.deg2rad(60)
+DIFF_STEER = np.deg2rad(30)
+
 
 
 show_animation = True
@@ -190,8 +191,8 @@ def iterative_linear_mpc_control(xref, x0, ovf, ovr, osf, osr):
 
         for i in range(T):
             uref[0, i] = ovf[i]
-            uref[1, i] = ovr[i]
-            uref[2, i] = osf[i]
+            uref[2, i] = ovr[i]
+            uref[1, i] = osf[i]
             uref[3, i] = osr[i]
             
         ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control(xref, xbar, x0, uref)
@@ -219,21 +220,32 @@ def linear_mpc_control(xref, xbar, x0, uref):
         A, B, C = get_linear_model_matrix(
             theta=xbar[2, t],
             v_f=uref[0, t],
-            v_r=uref[1, t],
-            delta_f=uref[2, t],
+            v_r=uref[2, t],
+            delta_f=uref[1, t],
             delta_r=uref[3, t])
     
         constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
+
         if t < (T - 1):
-            constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED]
-            constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_V_SPEED]
+            constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED * DT]
+            constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= DIFF_V_SPEED * DT]
+            constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_STEER * DT]
+            constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= DIFF_STEER * DT]
+
+        if t == 0:
+            constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= DIFF_STEER * DT]
+            constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= DIFF_STEER * DT]
 
 
     cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
 
     constraints += [x[:, 0] == x0]
     constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
-    constraints += [cvxpy.abs(u[1, :]) <= MAX_V_SPEED]
+    constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
+    constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
+    constraints += [cvxpy.abs(u[3, :]) <= MAX_STEER]
+    constraints += [u[1, :] == -u[3, :]]
+    constraints += [u[0, :] == u[2, :]]
 
     prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
     prob.solve(solver=cvxpy.ECOS, verbose=False)
@@ -243,8 +255,8 @@ def linear_mpc_control(xref, xbar, x0, uref):
         oy   = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
         oyaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
         ovf = np.array(u.value[0, :]).flatten()
-        ovr = np.array(u.value[1, :]).flatten()
-        osf = np.array(u.value[2, :]).flatten()
+        ovr = np.array(u.value[2, :]).flatten()
+        osf = np.array(u.value[1, :]).flatten()
         osr = np.array(u.value[3, :]).flatten()
 
     else:
@@ -259,26 +271,6 @@ def linear_mpc_control(xref, xbar, x0, uref):
 
     return ovf, ovr, osf, osr, ox, oy, oyaw
 
-
-# def get_linear_model_matrix(vr, theta_r):
-
-#     A = np.zeros((NX, NX))
-#     A[0, 0] = 1.0
-#     A[1, 1] = 1.0
-#     A[2, 2] = 1.0
-#     A[0, 2] = -vr * math.sin(theta_r) * DT
-#     A[1, 2] =  vr * math.cos(theta_r) * DT
-    
-#     B = np.zeros((NX, NU))
-#     B[0, 0] = math.cos(theta_r) * DT
-#     B[1, 0] = math.sin(theta_r) * DT
-#     B[2, 1] = DT
-
-#     C = np.zeros(NX)
-#     C[0] =  vr * math.sin(theta_r) * theta_r * DT
-#     C[1] = -vr * math.cos(theta_r) * theta_r * DT
-
-#     return A, B, C
 
 def get_linear_model_matrix(theta, v_f, delta_f, v_r, delta_r, wheel_base=1):
 
@@ -526,35 +518,74 @@ def main():
     t, x, y, yaw, vx, w = do_simulation(
         cx, cy, cyaw, dl, initial_state)
 
-    # if show_animation:  # pragma: no cover
-    #     plt.close("all")
-    #     plt.subplots()
-    #     plt.plot(cx, cy, "-r", label="spline")
-    #     plt.plot(x, y, "-g", label="tracking")
-    #     plt.grid(True)
-    #     plt.axis("equal")
-    #     plt.xlabel("x[m]")
-    #     plt.ylabel("y[m]")
-    #     plt.legend()
-
-    #     plt.subplots()
-    #     plt.plot(t, vx, "-r", label="vx speed")
-    #     plt.plot(t, w, "-g", label="w speed")
-    #     plt.grid(True)
-    #     plt.xlabel("Time [s]")
-    #     plt.ylabel("Speed [kmh]")
-
-    #     plt.show()
-
 def main2():
 
-    x, y, yaw = makeEightShapeTrajectory(400, 10)
-    plt.plot(x, y, 'r.')
-    plt.show()
+    print(__file__ + " start!!")
 
+    dl = 0.5
 
+    reference = retriveReferenceFromCSV('reference.csv')
+    cx, cy, cyaw = interpolateReference(reference, 1)
+
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    t, x, y, yaw, vx, w = do_simulation(
+        cx, cy, cyaw, dl, initial_state)
+
+def retriveReferenceFromCSV(file_name):
+    
+    node_lists = []
+
+    with open(file_name, newline='') as csvfile:
+        rows = csv.reader(csvfile)
+        n = 0
+        for row in rows:
+            if n == 0:
+                n += 1
+                continue
+
+            node_lists.append([float(e) for e in row])
+        # Node List Info:
+        # x | y | yaw | vx | vy | w | front_wheel: angle | front_wheel: speed | rear_wheel: angle | rear_wheel: speed  | time_stamp
+
+    return node_lists
+
+def interpolateReference(node_lists, interpolate_num=5):
+
+    pts_x, pts_y, pts_yaw = [], [], []
+
+    for i in range(len(node_lists) - 1):
+        vx = node_lists[i+1][3]
+        vy = node_lists[i+1][4]
+        w  = node_lists[i+1][5]
+
+        if w == 0:
+            continue
+
+        from_node = node_lists[i]
+        to_node   = node_lists[i+1]
+        
+        for i in range(interpolate_num):
+
+            icr = [-vy / w, vx / w]
+            yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
+            x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
+            y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
+            pts_x.append(x)
+            pts_y.append(y)
+            pts_yaw.append(yaw)
+
+        pts_x.append(to_node[0])
+        pts_y.append(to_node[1])
+        pts_yaw.append(to_node[2])
+
+    return pts_x, pts_y, pts_yaw
 
 if __name__ == '__main__':
-    main()
-    # main2()
+    # main()
+    main2()
     
