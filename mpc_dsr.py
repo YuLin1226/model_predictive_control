@@ -195,7 +195,9 @@ def iterative_linear_mpc_control(xref, x0, ovf, ovr, osf, osr):
             uref[1, i] = osf[i]
             uref[3, i] = osr[i]
             
-        ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_ackermann(xref, xbar, x0, uref)
+        # ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_ackermann(xref, xbar, x0, uref)
+        # ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_diff(xref, xbar, x0, uref)
+        ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_crab(xref, xbar, x0, uref)
         
     else:
         print("Iterative is max iter")
@@ -312,7 +314,7 @@ def linear_mpc_control_crab(xref, xbar, x0, uref):
     constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
     constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
     constraints += [cvxpy.abs(u[3, :]) <= MAX_STEER]
-    constraints += [u[1, :] == -u[3, :]]
+    constraints += [u[1, :] == u[3, :]]
     constraints += [u[0, :] == u[2, :]]
 
     prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
@@ -672,6 +674,27 @@ def main2():
     t, x, y, yaw, vx, w = do_simulation(
         cx, cy, cyaw, dl, initial_state)
 
+
+def main3():
+
+    print(__file__ + " start!!")
+
+    dl = 0.5
+
+    reference = retriveReferenceFromCSV('reference_crab.csv')
+
+    cx, cy, cyaw = interpolateReference(reference, 3, 'crab')
+    cx, cy, cyaw = removeRepeatedPoints(cx, cy, cyaw)
+
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    t, x, y, yaw, vx, w = do_simulation(
+        cx, cy, cyaw, dl, initial_state)
+
 def retriveReferenceFromCSV(file_name):
     
     node_lists = []
@@ -690,32 +713,56 @@ def retriveReferenceFromCSV(file_name):
 
     return node_lists
 
-def interpolateReference(node_lists, interpolate_num=5):
+def interpolateReference(node_lists, interpolate_num=5, mode='ackermann'):
 
     pts_x, pts_y, pts_yaw = [], [], []
 
-    for i in range(len(node_lists) - 1):
-        vx = node_lists[i+1][3]
-        vy = node_lists[i+1][4]
-        w  = node_lists[i+1][5]
+    if mode == 'ackermann':
 
-        if w == 0:
-            continue
+        for i in range(len(node_lists) - 1):
+            vx = node_lists[i+1][3]
+            vy = node_lists[i+1][4]
+            w  = node_lists[i+1][5]
 
-        from_node = node_lists[i]
-        to_node   = node_lists[i+1]
-        
-        for i in range(interpolate_num):
+            if w == 0:
+                continue
 
-            icr = [-vy / w, vx / w]
-            yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
-            x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
-            y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
-            pts_x.append(x)
-            pts_y.append(y)
-            pts_yaw.append(yaw)
+            from_node = node_lists[i]
+            to_node   = node_lists[i+1]
+            
+            for i in range(interpolate_num):
 
-    return pts_x, pts_y, pts_yaw
+                icr = [-vy / w, vx / w]
+                yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
+                x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
+                y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
+                pts_x.append(x)
+                pts_y.append(y)
+                pts_yaw.append(yaw)
+
+        return pts_x, pts_y, pts_yaw
+    
+    if mode == 'crab':
+
+        for i in range(len(node_lists) - 1):
+            vx = node_lists[i+1][3]
+            vy = node_lists[i+1][4]
+            w  = node_lists[i+1][5]
+
+            from_node = node_lists[i]
+            to_node   = node_lists[i+1]
+            
+            for i in range(interpolate_num):
+
+                yaw = from_node[2]
+                x = from_node[0] + (to_node[0] - from_node[0]) / interpolate_num * i
+                y = from_node[1] + (to_node[1] - from_node[1]) / interpolate_num * i
+
+                pts_x.append(x)
+                pts_y.append(y)
+                pts_yaw.append(yaw)
+
+        return pts_x, pts_y, pts_yaw
 
 def removeRepeatedPoints(cx, cy, cyaw, epsilon=0.00001):
 
@@ -742,6 +789,7 @@ def removeRepeatedPoints(cx, cy, cyaw, epsilon=0.00001):
 
 
 if __name__ == '__main__':
-    # main()
-    main2()
+    # main() # 8 shaped / Ackermann Mode
+    # main2() # RRT / Ackermann Mode
+    main3() # RRT / Crab Mode
     
