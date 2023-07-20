@@ -360,8 +360,8 @@ class ModelPredictiveControl:
         A[0, 0] = 1.0
         A[1, 1] = 1.0
         A[2, 2] = 1.0
-        A[0, 2] = -0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta) -0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta)
-        A[1, 2] = 0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta) -0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta)
+        A[0, 2] = -0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta) -0.5*self.DT_*(v_f*math.sin(delta_f)+v_r*math.sin(delta_r))*math.cos(theta)
+        A[1, 2] = 0.5*self.DT_*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta) -0.5*self.DT_*(v_f*math.sin(delta_f)+v_r*math.sin(delta_r))*math.sin(theta)
         # Define B
         B[0, 0] =  1 / 2 * self.DT_ * (math.cos(delta_f) * math.cos(theta) - math.sin(delta_f) * math.sin(theta))
         B[0, 1] = -1 / 2 * self.DT_ * (math.sin(delta_f) * math.cos(theta) + math.cos(delta_f) * math.sin(theta)) * v_f
@@ -371,8 +371,8 @@ class ModelPredictiveControl:
         B[1, 1] = -1 / 2 * self.DT_ * (math.sin(delta_f) * math.sin(theta) - math.cos(delta_f) * math.cos(theta)) * v_f
         B[1, 2] =  1 / 2 * self.DT_ * (math.cos(delta_r) * math.sin(theta) + math.sin(delta_r) * math.cos(theta))
         B[1, 3] = -1 / 2 * self.DT_ * (math.sin(delta_r) * math.cos(theta) - math.cos(delta_r) * math.sin(theta)) * v_r
-        B[2, 0] = -1 / self.wheel_base_ * self.DT_ * math.sin(delta_r)
-        B[2, 1] = -1 / self.wheel_base_ * self.DT_ * math.cos(delta_f) * v_f 
+        B[2, 0] =  1 / self.wheel_base_ * self.DT_ * math.sin(delta_r)
+        B[2, 1] =  1 / self.wheel_base_ * self.DT_ * math.cos(delta_f) * v_f 
         B[2, 2] = -1 / self.wheel_base_ * self.DT_ * math.sin(delta_r)
         B[2, 3] = -1 / self.wheel_base_ * self.DT_ * math.cos(delta_r) * v_r
         # Define C
