@@ -525,7 +525,8 @@ def main2():
     dl = 0.5
 
     reference = retriveReferenceFromCSV('reference.csv')
-    cx, cy, cyaw = interpolateReference(reference, 1)
+    cx, cy, cyaw = interpolateReference(reference, 3)
+    cx, cy, cyaw = removeRepeatedPoints(cx, cy, cyaw)
 
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
@@ -579,11 +580,31 @@ def interpolateReference(node_lists, interpolate_num=5):
             pts_y.append(y)
             pts_yaw.append(yaw)
 
-        pts_x.append(to_node[0])
-        pts_y.append(to_node[1])
-        pts_yaw.append(to_node[2])
-
     return pts_x, pts_y, pts_yaw
+
+def removeRepeatedPoints(cx, cy, cyaw, epsilon=0.00001):
+
+    nx, ny, nyaw = [], [], []
+
+    for x, y, yaw in zip(cx, cy, cyaw):
+
+        if not nx:
+            nx.append(x)
+            ny.append(y)
+            nyaw.append(yaw)
+            continue
+
+        dx = x - nx[-1]
+        dy = y - ny[-1]
+        if (dx**2 + dy**2) < epsilon:
+            continue
+
+        nx.append(x)
+        ny.append(y)
+        nyaw.append(yaw)
+
+    return nx, ny, nyaw
+
 
 if __name__ == '__main__':
     # main()
