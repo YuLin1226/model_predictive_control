@@ -43,9 +43,9 @@ LENGTH = 4.5  # [m]
 WIDTH = 2.0  # [m]
 
 MAX_V_SPEED = 0.47  # maximum speed [m/s]
-DIFF_V_SPEED = 0.2
-MAX_STEER = np.deg2rad(60)
-DIFF_STEER = np.deg2rad(30)
+DIFF_V_SPEED = 0.5
+MAX_STEER = np.deg2rad(90)
+DIFF_STEER = np.deg2rad(45)
 
 
 
@@ -74,7 +74,6 @@ def pi_2_pi(angle):
 
     return angle
 
-
 def plot_car(x, y, yaw, cabcolor="-r", truckcolor="-k"): 
     
     outline = np.array([[-LENGTH/2, LENGTH/2, LENGTH/2, -LENGTH/2, -LENGTH/2],
@@ -89,9 +88,6 @@ def plot_car(x, y, yaw, cabcolor="-r", truckcolor="-k"):
 
     plt.plot(np.array(outline[0, :]).flatten(),
              np.array(outline[1, :]).flatten(), truckcolor)
-
-
-
 
 def calc_nearest_index(state, cx, cy, cyaw, pind):
 
@@ -142,7 +138,6 @@ def predict_motion(x0, vf, vr, sf, sr, xref):
 
     return xbar
 
-
 def transfrom_gbm_command(vf, vr, sf, sr, wheel_base=1):
 
     H = np.array([
@@ -171,7 +166,6 @@ def transfrom_gbm_command(vf, vr, sf, sr, wheel_base=1):
 
     return vx, vy, w
 
-
 def iterative_linear_mpc_control(xref, x0, ovf, ovr, osf, osr):
     """
     MPC control with updating operational point iteratively
@@ -195,15 +189,16 @@ def iterative_linear_mpc_control(xref, x0, ovf, ovr, osf, osr):
             uref[1, i] = osf[i]
             uref[3, i] = osr[i]
             
-        ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control(xref, xbar, x0, uref)
+        # ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_ackermann(xref, xbar, x0, uref)
+        ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_diff(xref, xbar, x0, uref)
+        # ovf, ovr, osf, osr, ox, oy, oyaw = linear_mpc_control_crab(xref, xbar, x0, uref)
         
     else:
         print("Iterative is max iter")
 
     return ovf, ovr, osf, osr, ox, oy, oyaw
 
-
-def linear_mpc_control(xref, xbar, x0, uref):
+def linear_mpc_control_ackermann(xref, xbar, x0, uref):
     
     x = cvxpy.Variable((NX, T + 1))
     u = cvxpy.Variable((NU, T))
@@ -271,6 +266,133 @@ def linear_mpc_control(xref, xbar, x0, uref):
 
     return ovf, ovr, osf, osr, ox, oy, oyaw
 
+def linear_mpc_control_crab(xref, xbar, x0, uref):
+    
+    x = cvxpy.Variable((NX, T + 1))
+    u = cvxpy.Variable((NU, T))
+
+    cost = 0.0
+    constraints = []
+
+    for t in range(T):
+        cost += cvxpy.quad_form(u[:, t], R)
+
+        if t != 0:
+            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
+
+        A, B, C = get_linear_model_matrix(
+            theta=xbar[2, t],
+            v_f=uref[0, t],
+            v_r=uref[2, t],
+            delta_f=uref[1, t],
+            delta_r=uref[3, t])
+    
+        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
+
+        if t < (T - 1):
+            constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED * DT]
+            constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= DIFF_V_SPEED * DT]
+            constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_STEER * DT]
+            constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= DIFF_STEER * DT]
+
+        if t == 0:
+            constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= DIFF_STEER * DT]
+            constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= DIFF_STEER * DT]
+
+
+    cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
+
+    constraints += [x[:, 0] == x0]
+    constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
+    constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
+    constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
+    constraints += [cvxpy.abs(u[3, :]) <= MAX_STEER]
+    constraints += [u[1, :] == u[3, :]]
+    constraints += [u[0, :] == u[2, :]]
+
+    prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
+    prob.solve(solver=cvxpy.ECOS, verbose=False)
+
+    if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
+        ox   = np.array(x.value[0, :]).flatten() # this is only used in Plotting.
+        oy   = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
+        oyaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
+        ovf = np.array(u.value[0, :]).flatten()
+        ovr = np.array(u.value[2, :]).flatten()
+        osf = np.array(u.value[1, :]).flatten()
+        osr = np.array(u.value[3, :]).flatten()
+
+    else:
+        print("Error: Cannot solve mpc..")
+        ox = None
+        oy = None
+        oyaw = None
+        ovf = None
+        ovr = None
+        osf = None
+        osr = None
+
+    return ovf, ovr, osf, osr, ox, oy, oyaw
+
+def linear_mpc_control_diff(xref, xbar, x0, uref):
+    
+    x = cvxpy.Variable((NX, T + 1))
+    u = cvxpy.Variable((NU, T))
+
+    cost = 0.0
+    constraints = []
+
+    for t in range(T):
+        cost += cvxpy.quad_form(u[:, t], R)
+
+        if t != 0:
+            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q*(2**t))
+
+        A, B, C = get_linear_model_matrix(
+            theta=xbar[2, t],
+            v_f=uref[0, t],
+            v_r=uref[2, t],
+            delta_f=uref[1, t],
+            delta_r=uref[3, t])
+    
+        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
+
+        if t < (T - 1):
+            constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED * DT]
+            constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= DIFF_V_SPEED * DT]
+
+    cost += cvxpy.quad_form(xref[:, T] - x[:, T], Qf)
+
+    constraints += [x[:, 0] == x0]
+    constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
+    constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
+    constraints += [u[1, :] == MAX_STEER]
+    constraints += [u[3, :] == MAX_STEER]
+    
+
+    prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
+    prob.solve(solver=cvxpy.ECOS, verbose=False)
+
+    if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
+        ox   = np.array(x.value[0, :]).flatten() # this is only used in Plotting.
+        oy   = np.array(x.value[1, :]).flatten() # this is only used in Plotting.
+        oyaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
+        ovf = np.array(u.value[0, :]).flatten()
+        ovr = np.array(u.value[2, :]).flatten()
+        osf = np.array(u.value[1, :]).flatten()
+        osr = np.array(u.value[3, :]).flatten()
+
+    else:
+        print("Error: Cannot solve mpc..")
+        ox = None
+        oy = None
+        oyaw = None
+        ovf = None
+        ovr = None
+        osf = None
+        osr = None
+
+    return ovf, ovr, osf, osr, ox, oy, oyaw
 
 def get_linear_model_matrix(theta, v_f, delta_f, v_r, delta_r, wheel_base=1):
 
@@ -302,7 +424,6 @@ def get_linear_model_matrix(theta, v_f, delta_f, v_r, delta_r, wheel_base=1):
     C[2] = 1 / wheel_base * DT * (-math.cos(delta_f) * delta_f * v_f + math.cos(delta_r) * delta_r * v_r)
     
     return A, B, C
-
 
 def calc_ref_trajectory(state, cx, cy, cyaw, dl, pind):
     xref = np.zeros((NX, T + 1))
@@ -361,7 +482,6 @@ def calc_ref_trajectory2(state, cx, cy, cyaw, n_search_ind, pind):
 
     return xref, ind
 
-
 def check_goal(state, goal, tind, nind):
 
     # check goal
@@ -380,7 +500,6 @@ def check_goal(state, goal, tind, nind):
         return True
 
     return False
-
 
 def do_simulation(cx, cy, cyaw, dl, initial_state):
     """
@@ -469,7 +588,6 @@ def do_simulation(cx, cy, cyaw, dl, initial_state):
 
     return t, x, y, yaw, vx, w
 
-
 def smooth_yaw(yaw):
 
     for i in range(len(yaw) - 1):
@@ -484,7 +602,6 @@ def smooth_yaw(yaw):
             dyaw = yaw[i + 1] - yaw[i]
 
     return yaw
-
 
 def makeEightShapeTrajectory(n, size):
 
@@ -525,7 +642,48 @@ def main2():
     dl = 0.5
 
     reference = retriveReferenceFromCSV('reference.csv')
-    cx, cy, cyaw = interpolateReference(reference, 1)
+    cx, cy, cyaw = interpolateReference(reference, 3)
+    cx, cy, cyaw = removeRepeatedPoints(cx, cy, cyaw)
+
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    t, x, y, yaw, vx, w = do_simulation(
+        cx, cy, cyaw, dl, initial_state)
+
+def main3():
+
+    print(__file__ + " start!!")
+
+    dl = 0.5
+
+    reference = retriveReferenceFromCSV('reference_crab.csv')
+
+    cx, cy, cyaw = interpolateReference(reference, 3, 'crab')
+    cx, cy, cyaw = removeRepeatedPoints(cx, cy, cyaw)
+
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    t, x, y, yaw, vx, w = do_simulation(
+        cx, cy, cyaw, dl, initial_state)
+
+def main4():
+
+    print(__file__ + " start!!")
+
+    dl = 0.5
+
+    reference = retriveReferenceFromCSV('reference_diff.csv')
+
+    cx, cy, cyaw = interpolateReference(reference, 2, 'crab')
+    cx, cy, cyaw = removeRepeatedPoints(cx, cy, cyaw)
 
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
@@ -554,38 +712,84 @@ def retriveReferenceFromCSV(file_name):
 
     return node_lists
 
-def interpolateReference(node_lists, interpolate_num=5):
+def interpolateReference(node_lists, interpolate_num=5, mode='ackermann'):
 
     pts_x, pts_y, pts_yaw = [], [], []
 
-    for i in range(len(node_lists) - 1):
-        vx = node_lists[i+1][3]
-        vy = node_lists[i+1][4]
-        w  = node_lists[i+1][5]
+    if mode == 'ackermann' or mode == 'diff':
 
-        if w == 0:
+        for i in range(len(node_lists) - 1):
+            vx = node_lists[i+1][3]
+            vy = node_lists[i+1][4]
+            w  = node_lists[i+1][5]
+
+            if w == 0:
+                continue
+
+            from_node = node_lists[i]
+            to_node   = node_lists[i+1]
+            
+            for i in range(interpolate_num):
+
+                icr = [-vy / w, vx / w]
+                yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
+                x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
+                y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
+                pts_x.append(x)
+                pts_y.append(y)
+                pts_yaw.append(yaw)
+
+        return pts_x, pts_y, pts_yaw
+    
+    if mode == 'crab':
+
+        for i in range(len(node_lists) - 1):
+            vx = node_lists[i+1][3]
+            vy = node_lists[i+1][4]
+            w  = node_lists[i+1][5]
+
+            from_node = node_lists[i]
+            to_node   = node_lists[i+1]
+            
+            for i in range(interpolate_num):
+
+                yaw = from_node[2]
+                x = from_node[0] + (to_node[0] - from_node[0]) / interpolate_num * i
+                y = from_node[1] + (to_node[1] - from_node[1]) / interpolate_num * i
+
+                pts_x.append(x)
+                pts_y.append(y)
+                pts_yaw.append(yaw)
+
+        return pts_x, pts_y, pts_yaw
+
+def removeRepeatedPoints(cx, cy, cyaw, epsilon=0.00001):
+
+    nx, ny, nyaw = [], [], []
+
+    for x, y, yaw in zip(cx, cy, cyaw):
+
+        if not nx:
+            nx.append(x)
+            ny.append(y)
+            nyaw.append(yaw)
             continue
 
-        from_node = node_lists[i]
-        to_node   = node_lists[i+1]
-        
-        for i in range(interpolate_num):
+        dx = x - nx[-1]
+        dy = y - ny[-1]
+        if (dx**2 + dy**2) < epsilon:
+            continue
 
-            icr = [-vy / w, vx / w]
-            yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
-            x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
-            y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
-            pts_x.append(x)
-            pts_y.append(y)
-            pts_yaw.append(yaw)
+        nx.append(x)
+        ny.append(y)
+        nyaw.append(yaw)
 
-        pts_x.append(to_node[0])
-        pts_y.append(to_node[1])
-        pts_yaw.append(to_node[2])
+    return nx, ny, nyaw
 
-    return pts_x, pts_y, pts_yaw
 
 if __name__ == '__main__':
-    # main()
-    main2()
+    # main() # 8 shaped / Ackermann Mode
+    # main2() # RRT / Ackermann Mode
+    # main3() # RRT / Crab Mode
+    main4() # RRT / Diff Mode
     
