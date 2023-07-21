@@ -43,7 +43,7 @@ LENGTH = 4.5  # [m]
 WIDTH = 2.0  # [m]
 
 MAX_V_SPEED = 0.47  # maximum speed [m/s]
-DIFF_V_SPEED = 0.2
+DIFF_V_SPEED = 0.5
 MAX_STEER = np.deg2rad(90)
 DIFF_STEER = np.deg2rad(45)
 
@@ -346,7 +346,7 @@ def linear_mpc_control_diff(xref, xbar, x0, uref):
         cost += cvxpy.quad_form(u[:, t], R)
 
         if t != 0:
-            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
+            cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q*(2**t))
 
         A, B, C = get_linear_model_matrix(
             theta=xbar[2, t],
@@ -682,7 +682,7 @@ def main4():
 
     reference = retriveReferenceFromCSV('reference_diff.csv')
 
-    cx, cy, cyaw = interpolateReference(reference, 3, 'crab')
+    cx, cy, cyaw = interpolateReference(reference, 2, 'crab')
     cx, cy, cyaw = removeRepeatedPoints(cx, cy, cyaw)
 
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
