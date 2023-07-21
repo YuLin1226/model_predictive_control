@@ -152,6 +152,27 @@ class MPC:
         self.xy_tolerance_ = xy_tolerance
         self.stop_speed_ = stop_speed
 
+        # constraints setting - ackermann mode
+        self.ackermann_steer_inc_rate_ = np.deg2rad(45)
+        self.ackermann_speed_inc_rate_ = 0.2
+        self.ackermann_max_speed_ = 0.47
+        self.ackermann_max_steer_ = np.deg2rad(45)
+        # constraints setting - differential mode
+        self.differential_speed_inc_rate_ = 0.2
+        self.differential_fixed_steer_ = np.deg2rad(90)
+        self.differential_max_speed_ = 0.47
+        # constraints setting - crab mode
+        self.crab_steer_inc_rate_ = np.deg2rad(45)
+        self.crab_speed_inc_rate_ = 0.2
+        self.crab_max_speed_ = 0.5
+        self.crab_max_steer_ = np.deg2rad(45)
+
+        # Cost parameters
+        self.R_  = np.diag([0.01, 0.01, 0.01, 0.01])
+        self.Rd_ = np.diag([0.01, 0.01, 0.01, 0.01]) # Unused.
+        self.Q_  = np.diag([1.0, 1.0, 0.5])
+        self.Qf_ = np.diag([1.0, 1.0, 0.5])
+
     def doSimulation(self, cx, cy, cyaw, initial_state, max_time=500, dt=0.2):
 
         goal = [cx[-1], cy[-1]]
@@ -240,7 +261,7 @@ class MPC:
             
         return ovf, ovr, osf, osr, ox, oy, oyaw
 
-    def doLMPC_Ackermann(self, xref, xbar, x0, uref):
+    def doLMPC_Ackermann(self, xref, xbar, x0, uref, dt=0.2):
         
         x = cvxpy.Variable((self.nx_, self.horizon_ + 1))
         u = cvxpy.Variable((self.nu_, self.horizon_))
@@ -249,10 +270,10 @@ class MPC:
         constraints = []
 
         for t in range(self.horizon_):
-            cost += cvxpy.quad_form(u[:, t], R)
+            cost += cvxpy.quad_form(u[:, t], self.R_)
 
             if t != 0:
-                cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
+                cost += cvxpy.quad_form(xref[:, t] - x[:, t], self.Q_)
 
             
 
@@ -266,23 +287,23 @@ class MPC:
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
             if t < (self.horizon_ - 1):
-                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED * DT]
-                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= DIFF_V_SPEED * DT]
-                constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_STEER * DT]
-                constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= DIFF_STEER * DT]
+                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.ackermann_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.ackermann_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.ackermann_steer_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= self.ackermann_steer_inc_rate_ * dt]
 
             if t == 0:
-                constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= DIFF_STEER * DT]
-                constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= DIFF_STEER * DT]
+                constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= self.ackermann_steer_inc_rate_ * dt]
+                constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= self.ackermann_steer_inc_rate_ * dt]
 
 
-        cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], Qf)
+        cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], self.Qf_)
 
         constraints += [x[:, 0] == x0]
-        constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
-        constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
-        constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
-        constraints += [cvxpy.abs(u[3, :]) <= MAX_STEER]
+        constraints += [cvxpy.abs(u[0, :]) <= self.ackermann_max_speed_]
+        constraints += [cvxpy.abs(u[2, :]) <= self.ackermann_max_speed_]
+        constraints += [cvxpy.abs(u[1, :]) <= self.ackermann_max_steer_]
+        constraints += [cvxpy.abs(u[3, :]) <= self.ackermann_max_steer_]
         constraints += [u[1, :] == -u[3, :]]
         constraints += [u[0, :] == u[2, :]]
 
@@ -310,7 +331,7 @@ class MPC:
 
         return ovf, ovr, osf, osr, ox, oy, oyaw
 
-    def doLMPC_Differential(self, xref, xbar, x0, uref):
+    def doLMPC_Differential(self, xref, xbar, x0, uref, dt=0.2):
         
         x = cvxpy.Variable((self.nx_, self.horizon_ + 1))
         u = cvxpy.Variable((self.nu_, self.horizon_))
@@ -319,10 +340,10 @@ class MPC:
         constraints = []
 
         for t in range(self.horizon_):
-            cost += cvxpy.quad_form(u[:, t], R)
+            cost += cvxpy.quad_form(u[:, t], self.R_)
 
             if t != 0:
-                cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q*(2**t))
+                cost += cvxpy.quad_form(xref[:, t] - x[:, t], self.Q_)
 
             A, B, C = self.gbm_.getRobotModelMatrice(
                 theta=xbar[2, t],
@@ -334,16 +355,16 @@ class MPC:
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
             if t < (self.horizon_ - 1):
-                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED * DT]
-                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= DIFF_V_SPEED * DT]
+                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.differential_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.differential_speed_inc_rate_ * dt]
 
-        cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], Qf)
+        cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], self.Qf_)
 
         constraints += [x[:, 0] == x0]
-        constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
-        constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
-        constraints += [u[1, :] == MAX_STEER]
-        constraints += [u[3, :] == MAX_STEER]
+        constraints += [cvxpy.abs(u[0, :]) <= self.differential_max_speed_]
+        constraints += [cvxpy.abs(u[2, :]) <= self.differential_max_speed_]
+        constraints += [u[1, :] == self.differential_fixed_steer_]
+        constraints += [u[3, :] == self.differential_fixed_steer_]
         
 
         prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
@@ -370,7 +391,7 @@ class MPC:
 
         return ovf, ovr, osf, osr, ox, oy, oyaw
 
-    def doLMPC_Crab(self, xref, xbar, x0, uref):
+    def doLMPC_Crab(self, xref, xbar, x0, uref, dt=0.2):
 
         x = cvxpy.Variable((self.nx_, self.horizon_ + 1))
         u = cvxpy.Variable((self.nu_, self.horizon_))
@@ -379,10 +400,10 @@ class MPC:
         constraints = []
 
         for t in range(self.horizon_):
-            cost += cvxpy.quad_form(u[:, t], R)
+            cost += cvxpy.quad_form(u[:, t], self.R_)
 
             if t != 0:
-                cost += cvxpy.quad_form(xref[:, t] - x[:, t], Q)
+                cost += cvxpy.quad_form(xref[:, t] - x[:, t], self.Q_)
 
             A, B, C = self.gbm_.getRobotModelMatrice(
                 theta=xbar[2, t],
@@ -394,23 +415,23 @@ class MPC:
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
             if t < (self.horizon_ - 1):
-                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= DIFF_V_SPEED * DT]
-                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= DIFF_V_SPEED * DT]
-                constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= DIFF_STEER * DT]
-                constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= DIFF_STEER * DT]
+                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.crab_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.crab_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.crab_steer_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= self.crab_steer_inc_rate_ * dt]
 
             if t == 0:
-                constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= DIFF_STEER * DT]
-                constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= DIFF_STEER * DT]
+                constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= self.crab_steer_inc_rate_ * dt]
+                constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= self.crab_steer_inc_rate_ * dt]
 
 
-        cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], Qf)
+        cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], self.Qf_)
 
         constraints += [x[:, 0] == x0]
-        constraints += [cvxpy.abs(u[0, :]) <= MAX_V_SPEED]
-        constraints += [cvxpy.abs(u[2, :]) <= MAX_V_SPEED]
-        constraints += [cvxpy.abs(u[1, :]) <= MAX_STEER]
-        constraints += [cvxpy.abs(u[3, :]) <= MAX_STEER]
+        constraints += [cvxpy.abs(u[0, :]) <= self.crab_max_speed_]
+        constraints += [cvxpy.abs(u[2, :]) <= self.crab_max_speed_]
+        constraints += [cvxpy.abs(u[1, :]) <= self.crab_max_steer_]
+        constraints += [cvxpy.abs(u[3, :]) <= self.crab_max_steer_]
         constraints += [u[1, :] == u[3, :]]
         constraints += [u[0, :] == u[2, :]]
 
