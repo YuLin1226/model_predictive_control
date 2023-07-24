@@ -40,7 +40,7 @@ class State:
         
 class CarViz:
 
-    def __init__(self, car_size) -> None:
+    def __init__(self, car_size=[1.5, 0.6]) -> None:
         
         self.length_ = car_size[0]
         self.width_ = car_size[1]
@@ -62,6 +62,23 @@ class CarViz:
         
     def vizOn(self):
         plt.show()
+
+    def showAnimation(self, ox, oy, cx, cy, x, y, xref, target_ind):
+
+        plt.cla()
+        # for stopping simulation with the esc key.
+        plt.gcf().canvas.mpl_connect('key_release_event', lambda event: [exit(0) if event.key == 'escape' else None])
+        if ox is not None:
+            plt.plot(ox, oy, "xr", label="MPC")
+        plt.plot(cx, cy, "-r", label="course")
+        plt.plot(x, y, "ob", label="trajectory")
+        plt.plot(xref[0, :], xref[1, :], "xk", label="xref")
+        plt.plot(cx[target_ind], cy[target_ind], "xg", label="target")
+        # plot_car(state.x, state.y, state.yaw)
+        plt.axis("equal")
+        plt.grid(True)
+        plt.pause(0.0001)
+    
 
 class GeneralBicycleModel:
 
@@ -173,6 +190,9 @@ class MPC:
         self.Q_  = np.diag([1.0, 1.0, 0.5])
         self.Qf_ = np.diag([1.0, 1.0, 0.5])
 
+        # Car viz
+        self.viz_ = CarViz()
+
     def doSimulation(self, cx, cy, cyaw, initial_state, max_time=500, dt=0.2):
 
         goal = [cx[-1], cy[-1]]
@@ -220,6 +240,8 @@ class MPC:
             if self.checkGoal(state, goal, target_ind, len(cx)):
                 print("Goal Reached.")
                 break
+
+            self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind)
 
         return t, x, y, yaw, vx, w
 
