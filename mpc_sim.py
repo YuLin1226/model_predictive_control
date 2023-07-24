@@ -709,7 +709,7 @@ def main1():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state)
 
 def main2():
 
@@ -726,7 +726,7 @@ def main2():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state, 'ackermann')
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'ackermann')
 
 def main3():
 
@@ -743,7 +743,7 @@ def main3():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state, 'crab')
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'crab')
 
 def main4():
 
@@ -760,7 +760,7 @@ def main4():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state, 'diff')
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'diff')
 
 def main5():
 
