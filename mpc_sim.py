@@ -645,6 +645,24 @@ class TrajectoryGenerator:
             nyaw.append(yaw)
         return nx, ny, nyaw
 
+    def splitTrajectoryWithMotionModes(self, cmode):
+
+        trajectories_idx_group = []
+        from_idx, to_idx = None, None
+        current_mode = None
+        for i, mode in zip(range(len(cmode) - 1), cmode):
+            
+            if from_idx is None:
+                from_idx = i
+                current_mode = mode
+
+            if current_mode != cmode[i+1]:
+                to_idx = i
+                trajectories_idx_group.append([from_idx, to_idx])
+                from_idx, to_idx = None, None
+
+        return trajectories_idx_group
+
     def makeEightShapeTrajectory(self, size=10, n=121):
         x, y, yaw = [], [], []
         for i in range(n):
