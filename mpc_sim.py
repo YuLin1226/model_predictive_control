@@ -193,7 +193,7 @@ class MPC:
         # Car viz
         self.viz_ = CarViz()
 
-    def doSimulation(self, cx, cy, cyaw, initial_state, max_time=500, dt=0.2):
+    def doSimulation(self, cx, cy, cyaw, initial_state, mode='ackermann', max_time=500, dt=0.2):
 
         goal = [cx[-1], cy[-1]]
         state = initial_state
@@ -220,7 +220,7 @@ class MPC:
 
             x0 = [state.x, state.y, state.yaw] 
             xref, target_ind = self.getReferenceTrajectory(state, cx, cy, cyaw, 2, target_ind)
-            ovf, ovr, osf, osr, ox, oy, oyaw = self.iterativeLMPC(xref, x0, ovf, ovr, osf, osr)
+            ovf, ovr, osf, osr, ox, oy, oyaw = self.iterativeLMPC(xref, x0, ovf, ovr, osf, osr, mode)
 
             if ovf is not None:
                 vfi, vri, sfi, sri = ovf[0], ovr[0], osf[0], osr[0]
@@ -261,7 +261,7 @@ class MPC:
 
         return xbar
 
-    def iterativeLMPC(self, xref, x0, ovf, ovr, osf, osr, max_iter=1):
+    def iterativeLMPC(self, xref, x0, ovf, ovr, osf, osr, mode='ackermann', max_iter=1):
         
         ox, oy, oyaw = None, None, None
         if ovf is None or ovr is None or osf is None or osr is None:
@@ -277,9 +277,15 @@ class MPC:
                 uref[2, i] = ovr[i]
                 uref[1, i] = osf[i]
                 uref[3, i] = osr[i]
-            # ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, x0, uref)
-            ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Differential(xref, xbar, x0, uref)
-            # ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Crab(xref, xbar, x0, uref)
+
+                if mode == 'ackermann':
+                    ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, x0, uref)
+                elif mode == 'diff':
+                    ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Differential(xref, xbar, x0, uref)
+                elif mode == 'crab':
+                    ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Crab(xref, xbar, x0, uref)
+                else:
+                    print("Mode not defined. ")
             
         return ovf, ovr, osf, osr, ox, oy, oyaw
 
@@ -708,7 +714,7 @@ def main2():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state, 'ackermann')
 
 def main3():
 
@@ -725,7 +731,7 @@ def main3():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state, 'crab')
 
 def main4():
 
@@ -742,7 +748,7 @@ def main4():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state, 'diff')
 
 
 if __name__ == '__main__':
