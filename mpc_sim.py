@@ -245,6 +245,19 @@ class MPC:
 
         return t, x, y, yaw, vx, w
 
+    def doSimulationWithAllMotionModes(self, idx_group, cx, cy, cyaw, cmode, initial_state, max_time=500, dt=0.2):
+        
+        current_state = initial_state
+        for idx in idx_group:
+            lx = cx[idx[0] : idx[1] + 1]
+            ly = cy[idx[0] : idx[1] + 1]
+            lyaw = cyaw[idx[0] : idx[1] + 1]
+            lmode = cmode[idx[0]]
+        
+            t, x, y, yaw, vx, w = self.doSimulation(lx, ly, lyaw, current_state, lmode)
+            current_state = State(x, y,yaw)
+
+    
     def predictMotion(self, x0, vf, vr, sf, sr, xref):
         
         xbar = xref * 0.0
@@ -750,9 +763,23 @@ def main4():
     mpc = MPC()
     t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state, 'diff')
 
+def main5():
+
+    print(__file__ + " start...")
+
+    tg = TrajectoryGenerator()
+    ref = tg.retriveTrajectoryFromCSV('output.csv')
+    cx, cy, cyaw, cmode = tg.interpolateReference2(ref, 3)
+    idx_group = tg.splitTrajectoryWithMotionModes(cmode)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    mpc = MPC()
+    t, x, y, yaw, vx, w = mpc.doSimulationWithAllMotionModes(idx_group, cx, cy, cyaw, cmode, initial_state)
+
 
 if __name__ == '__main__':
-    main1() # 8 shaped / Ackermann Mode
+    # main1() # 8 shaped / Ackermann Mode
     # main2() # RRT / Ackermann Mode
     # main3() # RRT / Crab Mode
     # main4() # RRT / Diff Mode
+    main5()
