@@ -243,7 +243,7 @@ class MPC:
 
             self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind, state)
 
-        return t, x, y, yaw, vx, w
+        return t, x, y, yaw, vx, vy, w, state
 
     def doSimulationWithAllMotionModes(self, idx_group, cx, cy, cyaw, cmode, initial_state, max_time=500, dt=0.2):
         
@@ -253,9 +253,8 @@ class MPC:
             ly = cy[idx[0] : idx[1] + 1]
             lyaw = cyaw[idx[0] : idx[1] + 1]
             lmode = cmode[idx[0]]
-        
-            t, x, y, yaw, vx, w = self.doSimulation(lx, ly, lyaw, current_state, lmode)
-            current_state = State(x, y,yaw)
+            t, x, y, yaw, vx, vy, w, state = self.doSimulation(lx, ly, lyaw, current_state, lmode)
+            current_state = state
 
     
     def predictMotion(self, x0, vf, vr, sf, sr, xref):
