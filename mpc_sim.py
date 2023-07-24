@@ -63,9 +63,13 @@ class CarViz:
     def vizOn(self):
         plt.show()
 
+    def plotTrajectory(self, cx, cy):
+        plt.plot(cx, cy, "k-")
+
+
     def showAnimation(self, ox, oy, cx, cy, x, y, xref, target_ind, state):
 
-        plt.cla()
+        # plt.cla()
         # for stopping simulation with the esc key.
         plt.gcf().canvas.mpl_connect('key_release_event', lambda event: [exit(0) if event.key == 'escape' else None])
         if ox is not None:
@@ -74,7 +78,7 @@ class CarViz:
         plt.plot(x, y, "ob", label="trajectory")
         plt.plot(xref[0, :], xref[1, :], "xk", label="xref")
         plt.plot(cx[target_ind], cy[target_ind], "xg", label="target")
-        self.plotCar(state.x, state.y, state.yaw)
+        # self.plotCar(state.x, state.y, state.yaw)
         plt.axis("equal")
         plt.grid(True)
         plt.pause(0.0001)
@@ -160,7 +164,7 @@ class GeneralBicycleModel:
 
 class MPC:
 
-    def __init__(self, horizon=5, nx=3, nu=4, xy_tolerance=1.5, stop_speed=0.2) -> None:
+    def __init__(self, horizon=5, nx=3, nu=4, xy_tolerance=1.5, stop_speed=0.2, show_animation=True) -> None:
         
         self.horizon_ = horizon
         self.nx_ = nx
@@ -192,6 +196,7 @@ class MPC:
 
         # Car viz
         self.viz_ = CarViz()
+        self.show_animation_ = show_animation
 
     def doSimulation(self, cx, cy, cyaw, initial_state, mode='ackermann', max_time=500, dt=0.2):
 
@@ -241,12 +246,15 @@ class MPC:
                 print("Goal Reached.")
                 break
 
-            self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind, state)
+            if self.show_animation_:
+                self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind, state)
 
         return t, x, y, yaw, vx, vy, w, state
 
     def doSimulationWithAllMotionModes(self, idx_group, cx, cy, cyaw, cmode, initial_state, max_time=500, dt=0.2):
         
+        self.viz_.plotTrajectory(cx, cy)
+
         current_state = initial_state
         for idx in idx_group:
             lx = cx[idx[0] : idx[1] + 1]
