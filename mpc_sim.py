@@ -607,8 +607,56 @@ def main1():
     mpc = MPC()
     t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
 
+def main2():
 
+    print(__file__ + " start...")
 
+    tg = TrajectoryGenerator()
+    ref = tg.retriveTrajectoryFromCSV('reference.csv')
+    cx, cy, cyaw = tg.interpolateReference(ref, 3)
+    cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    mpc = MPC()
+    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+
+def main3():
+
+    print(__file__ + " start...")
+
+    tg = TrajectoryGenerator()
+    ref = tg.retriveTrajectoryFromCSV('reference_crab.csv')
+    cx, cy, cyaw = tg.interpolateReference(ref, 3, 'crab')
+    cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    mpc = MPC()
+    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+
+def main4():
+
+    print(__file__ + " start...")
+
+    tg = TrajectoryGenerator()
+    ref = tg.retriveTrajectoryFromCSV('reference_diff.csv')
+    cx, cy, cyaw = tg.interpolateReference(ref, 2, 'diff')
+    cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    mpc = MPC()
+    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
 
 
 if __name__ == '__main__':
