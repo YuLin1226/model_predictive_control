@@ -559,7 +559,7 @@ class TrajectoryGenerator:
                     pts_yaw.append(yaw)
             return pts_x, pts_y, pts_yaw
 
-    def removeRepeatedPoints(cx, cy, cyaw, epsilon=0.00001):
+    def removeRepeatedPoints(self, cx, cy, cyaw, epsilon=0.00001):
 
         nx, ny, nyaw = [], [], []
         for x, y, yaw in zip(cx, cy, cyaw):
@@ -577,7 +577,7 @@ class TrajectoryGenerator:
             nyaw.append(yaw)
         return nx, ny, nyaw
 
-    def makeEightShapeTrajectory(n, size):
+    def makeEightShapeTrajectory(self, n, size):
         x, y, yaw = [], [], []
         for i in range(n):
             ptx = 0.8 * math.sin(2 * math.pi / 60 * i) * size
@@ -590,3 +590,29 @@ class TrajectoryGenerator:
             yaw.append(ptyaw)
         return x ,y, yaw
     
+
+def main1():
+
+    print(__file__ + " start...")
+
+    
+    tg = TrajectoryGenerator()
+    cx, cy, cyaw = tg.makeEightShapeTrajectory(400, 10)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    mpc = MPC()
+    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+
+
+
+
+
+if __name__ == '__main__':
+    main1() # 8 shaped / Ackermann Mode
+    # main2() # RRT / Ackermann Mode
+    # main3() # RRT / Crab Mode
+    # main4() # RRT / Diff Mode
