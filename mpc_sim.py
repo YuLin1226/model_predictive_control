@@ -63,7 +63,7 @@ class CarViz:
     def vizOn(self):
         plt.show()
 
-    def showAnimation(self, ox, oy, cx, cy, x, y, xref, target_ind):
+    def showAnimation(self, ox, oy, cx, cy, x, y, xref, target_ind, state):
 
         plt.cla()
         # for stopping simulation with the esc key.
@@ -74,7 +74,7 @@ class CarViz:
         plt.plot(x, y, "ob", label="trajectory")
         plt.plot(xref[0, :], xref[1, :], "xk", label="xref")
         plt.plot(cx[target_ind], cy[target_ind], "xg", label="target")
-        # plot_car(state.x, state.y, state.yaw)
+        self.plotCar(state.x, state.y, state.yaw)
         plt.axis("equal")
         plt.grid(True)
         plt.pause(0.0001)
@@ -241,7 +241,7 @@ class MPC:
                 print("Goal Reached.")
                 break
 
-            self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind)
+            self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind, state)
 
         return t, x, y, yaw, vx, w
 
@@ -599,7 +599,7 @@ class TrajectoryGenerator:
             nyaw.append(yaw)
         return nx, ny, nyaw
 
-    def makeEightShapeTrajectory(self, n, size):
+    def makeEightShapeTrajectory(self, size=10, n=121):
         x, y, yaw = [], [], []
         for i in range(n):
             ptx = 0.8 * math.sin(2 * math.pi / 60 * i) * size
@@ -619,7 +619,7 @@ def main1():
 
     
     tg = TrajectoryGenerator()
-    cx, cy, cyaw = tg.makeEightShapeTrajectory(400, 10)
+    cx, cy, cyaw = tg.makeEightShapeTrajectory()
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
     cx.pop(0)
