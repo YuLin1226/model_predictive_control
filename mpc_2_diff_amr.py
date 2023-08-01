@@ -143,6 +143,13 @@ class GeneralBicycleModel:
         vy = float(vi[1])
         w = float(vi[2])
         return vx, vy, w
+    
+    def simulateWheelCommandFromDiffDriveRobotCommand(self, vf, vr, theta_f, theta_r, theta_system):
+
+        sf = theta_f - theta_system
+        sr = theta_r - theta_system
+        return vf, vr, sf, sr
+
 
     def getRobotModelMatrice(self, theta, v_f, delta_f, v_r, delta_r, dt=0.2):
         """
@@ -280,16 +287,26 @@ class MPC:
             t, x, y, yaw, vx, vy, w, state = self.doSimulation(lx, ly, lyaw, current_state, lmode)
             current_state = state
 
+
     
-    def predictMotion(self, x0, vf, vr, sf, sr, xref):
-        
+    def predictMotion(self, x0, vf, vr, wf, wr, xref):
+        """
+        x0 = [x, y, theta, [xf, yf, theta_f], [xr, yr, theta_r]]
+        """
         xbar = xref * 0.0
-        for i, _ in enumerate(x0):
-            xbar[i, 0] = x0[i]
+        xbar[0, 0] = x0[0]
+        xbar[1, 0] = x0[1]
+        xbar[2, 0] = x0[2]
 
         state = State(x=x0[0], y=x0[1], yaw=x0[2])
-        for (vfi, vri, sfi, sri, i) in zip(vf, vr, sf, sr, range(1, self.horizon_ + 1)):
+        state_f = State(x=x0[3][0], y=x0[3][1], yaw=x0[3][2])
+        state_r = State(x=x0[4][0], y=x0[4][1], yaw=x0[4][2])
+        for (vfi, vri, wfi, wri, i) in zip(vf, vr, wf, wr, range(1, self.horizon_ + 1)):
+
+            vfi, vri, sfi, sri = self.gbm_.simulateWheelCommandFromDiffDriveRobotCommand(vfi, vri, state_f.yaw, state_r.yaw, state.yaw)
             vx, vy, w = self.gbm_.transformWheelCommandToRobotCommand(vfi, vri, sfi, sri)
+            state_f = self.ddrm_.updateState(state_f, vfi, wfi)
+            state_r = self.ddrm_.updateState(state_r, vri, wri)
             state = self.gbm_.updateState(state, vx, vy, w)
             xbar[0, i] = state.x
             xbar[1, i] = state.y
@@ -297,33 +314,33 @@ class MPC:
 
         return xbar
 
-    def iterativeLMPC(self, xref, x0, ovf, ovr, osf, osr, mode='ackermann', max_iter=1):
+    def iterativeLMPC(self, xref, x0, ovf, ovr, owf, owr, mode='ackermann', max_iter=1):
         
         ox, oy, oyaw = None, None, None
-        if ovf is None or ovr is None or osf is None or osr is None:
+        if ovf is None or ovr is None or owf is None or owr is None:
             ovf = [0.0] * self.horizon_
             ovr = [0.0] * self.horizon_
-            osf = [0.0] * self.horizon_
-            osr = [0.0] * self.horizon_
+            owf = [0.0] * self.horizon_
+            owr = [0.0] * self.horizon_
         uref = np.zeros((self.nu_, self.horizon_))
         for i in range(max_iter):
-            xbar = self.predictMotion(x0, ovf, ovr, osf, osr, xref)
+            xbar = self.predictMotion(x0, ovf, ovr, owf, owr, xref)
             for i in range(self.horizon_):
                 uref[0, i] = ovf[i]
                 uref[2, i] = ovr[i]
-                uref[1, i] = osf[i]
-                uref[3, i] = osr[i]
+                uref[1, i] = owf[i]
+                uref[3, i] = owr[i]
 
                 if mode == 'ackermann':
-                    ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, x0, uref)
+                    ovf, ovr, owf, owr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, x0, uref)
                 elif mode == 'diff':
-                    ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Differential(xref, xbar, x0, uref)
+                    ovf, ovr, owf, owr, ox, oy, oyaw = self.doLMPC_Differential(xref, xbar, x0, uref)
                 elif mode == 'crab':
-                    ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Crab(xref, xbar, x0, uref)
+                    ovf, ovr, owf, owr, ox, oy, oyaw = self.doLMPC_Crab(xref, xbar, x0, uref)
                 else:
                     print("Mode not defined. ")
             
-        return ovf, ovr, osf, osr, ox, oy, oyaw
+        return ovf, ovr, owf, owr, ox, oy, oyaw
 
     def doLMPC_Ackermann(self, xref, xbar, x0, uref, dt=0.2):
         
