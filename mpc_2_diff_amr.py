@@ -740,17 +740,26 @@ def main1():
 
     print(__file__ + " start...")
 
-    
+    gbm_length = 1
     tg = TrajectoryGenerator()
     cx, cy, cyaw = tg.makeEightShapeTrajectory()
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+    xc, yc, yawc = cx[0], cy[0], cyaw[0]
+    xf = xc + gbm_length * math.cos(yawc)
+    yf = yc + gbm_length * math.sin(yawc)
+    yawf = yawc
+    xr = xc - gbm_length * math.cos(yawc)
+    yr = yc - gbm_length * math.sin(yawc)
+    yawr = yawc
+    initial_state = State(x=xc, y=yc, yaw=yawc)
+    initial_state_f = State(x=xf, y=yf, yaw=yawf)
+    initial_state_r = State(x=xr, y=yr, yaw=yawr)
 
     cx.pop(0)
     cy.pop(0)
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state)
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, initial_state_f, initial_state_r)
 
 def main2():
 
