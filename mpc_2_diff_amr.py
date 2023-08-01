@@ -252,11 +252,9 @@ class MPC:
 
             if ovf is not None:
                 vfi, vri, wfi, wri = ovf[0], ovr[0], owf[0], owr[0]
-                vfi, vri, sfi, sri = self.gbm_.simulateWheelCommandFromDiffDriveRobotCommand(vfi, vri, state_f.yaw, state_r.yaw, state.yaw)
-                vxi, vyi, wi = self.gbm_.transformWheelCommandToRobotCommand(vfi, vri, sfi, sri)
                 state_f = self.ddrm_.updateState(state_f, vfi, wfi)
                 state_r = self.ddrm_.updateState(state_r, vri, wri)
-                state = self.gbm_.updateState(state, vxi, vyi, wi)
+                state = self.gbm_.updateStateFromDiffDriveRobotState(state, state_f, state_r)
                 
             time = time + dt
 
@@ -315,12 +313,9 @@ class MPC:
         state_r = State(x=x0[4][0], y=x0[4][1], yaw=x0[4][2])
         for (vfi, vri, wfi, wri, i) in zip(vf, vr, wf, wr, range(1, self.horizon_ + 1)):
 
-            wheel_base = math.sqrt((state_f.x - state_r.x)**2 + (state_f.y - state_r.y)**2)
-            vfi, vri, sfi, sri = self.gbm_.simulateWheelCommandFromDiffDriveRobotCommand(vfi, vri, state_f.yaw, state_r.yaw, state.yaw)
-            vx, vy, w = self.gbm_.transformWheelCommandToRobotCommand(vfi, vri, sfi, sri, wheel_base)
             state_f = self.ddrm_.updateState(state_f, vfi, wfi)
             state_r = self.ddrm_.updateState(state_r, vri, wri)
-            state = self.gbm_.updateState(state, vx, vy, w)
+            state = self.gbm_.updateStateFromDiffDriveRobotState(state, state_f, state_r)
             xbar[0, i] = state.x
             xbar[1, i] = state.y
             xbar[2, i] = state.yaw
