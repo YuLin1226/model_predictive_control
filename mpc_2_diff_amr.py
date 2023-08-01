@@ -84,6 +84,21 @@ class CarViz:
         plt.pause(0.0001)
     
 
+class DiffDrivedRobotModel:
+
+    def __init__(self) -> None:
+        pass
+
+    def updateState(self, state, vx, w, dt=0.2):
+
+        state.x = state.x + vx * math.cos(state.yaw) * dt
+        state.y = state.y + vx * math.sin(state.yaw) * dt
+        state.yaw = state.yaw + w * dt
+        state.vx = vx
+        state.vy = 0.0
+        state.w = w
+        return state
+
 class GeneralBicycleModel:
 
     def __init__(self, wheel_base=1, nx=3, nu=4) -> None:
@@ -170,6 +185,7 @@ class MPC:
         self.nx_ = nx
         self.nu_ = nu
         self.gbm_ = GeneralBicycleModel(wheel_base=1, nx=nx, nu=nu)
+        self.ddrm_ = DiffDrivedRobotModel()
         self.xy_tolerance_ = xy_tolerance
         self.stop_speed_ = stop_speed
 
