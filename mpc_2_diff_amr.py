@@ -143,14 +143,14 @@ class GeneralBicycleModel:
         w = float(vi[2])
         return vx, vy, w
     
-    def simulateWheelCommandFromDiffDriveRobotCommand(self, vf, vr, theta_f, theta_r, theta_system):
+    def simulateWheelCommandFromDiffDriveRobotCommand(self, vf, vr, theta_f, theta_r, theta):
 
-        sf = theta_f - theta_system
-        sr = theta_r - theta_system
+        sf = theta_f - theta
+        sr = theta_r - theta
         return vf, vr, sf, sr
 
 
-    def getRobotModelMatrice(self, theta, v_f, delta_f, v_r, delta_r, dt=0.2):
+    def getRobotModelMatrice(self, v_f, theta_f, v_r, theta_r, theta, dt=0.2):
         """
         Robot Model: x(k+1) = A x(k) + B u(k) + C
         """
@@ -158,28 +158,20 @@ class GeneralBicycleModel:
         A = np.zeros((self.nx_, self.nx_))
         A[0, 0] = 1.0
         A[1, 1] = 1.0
-        A[2, 2] = 1.0
-        A[0, 2] = -0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta) -0.5*dt*(v_f*math.sin(delta_f)+v_r*math.sin(delta_r))*math.cos(theta)
-        A[1, 2] = 0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta) -0.5*dt*(v_f*math.sin(delta_f)+v_r*math.sin(delta_r))*math.sin(theta)
+        A[2, 2] = 1.0 - 1 / self.wheel_base_ * dt * (v_f * math.cos(theta_f - theta) - v_r * math.cos(theta_r - theta))
         # Define B
         B = np.zeros((self.nx_, self.nu_))
-        B[0, 0] =  1 / 2 * dt * (math.cos(delta_f) * math.cos(theta) - math.sin(delta_f) * math.sin(theta))
-        B[0, 1] = -1 / 2 * dt * (math.sin(delta_f) * math.cos(theta) + math.cos(delta_f) * math.sin(theta)) * v_f
-        B[0, 2] =  1 / 2 * dt * (math.cos(delta_r) * math.cos(theta) - math.sin(delta_r) * math.sin(theta))
-        B[0, 3] = -1 / 2 * dt * (math.sin(delta_r) * math.cos(theta) + math.cos(delta_r) * math.sin(theta)) * v_r
-        B[1, 0] =  1 / 2 * dt * (math.cos(delta_f) * math.sin(theta) + math.sin(delta_f) * math.cos(theta))
-        B[1, 1] = -1 / 2 * dt * (math.sin(delta_f) * math.sin(theta) - math.cos(delta_f) * math.cos(theta)) * v_f
-        B[1, 2] =  1 / 2 * dt * (math.cos(delta_r) * math.sin(theta) + math.sin(delta_r) * math.cos(theta))
-        B[1, 3] = -1 / 2 * dt * (math.sin(delta_r) * math.cos(theta) - math.cos(delta_r) * math.sin(theta)) * v_r
-        B[2, 0] =  1 / self.wheel_base_ * dt * math.sin(delta_r)
-        B[2, 1] =  1 / self.wheel_base_ * dt * math.cos(delta_f) * v_f 
-        B[2, 2] = -1 / self.wheel_base_ * dt * math.sin(delta_r)
-        B[2, 3] = -1 / self.wheel_base_ * dt * math.cos(delta_r) * v_r
+        B[0, 0] = 1 / 2 * dt * math.cos(theta_f)
+        B[0, 2] = 1 / 2 * dt * math.cos(theta_r)
+        B[1, 0] = 1 / 2 * dt * math.sin(theta_f)
+        B[1, 2] = 1 / 2 * dt * math.sin(theta_r)
+        B[2, 0] = 1 / self.wheel_base_ * dt * math.sin(theta_f - theta)
+        B[2, 2] = 1 / self.wheel_base_ * dt * math.sin(theta_r - theta)
         # Define C
         C = np.zeros(self.nx_)
-        C[0] = 1 / 2 * dt * (v_f * math.cos(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.cos(delta_r) * math.sin(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.cos(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.cos(theta) * (delta_r + theta))
-        C[1] = 1 / 2 * dt * (-v_f * math.cos(delta_f) * math.cos(theta) * (delta_f + theta) - v_r * math.cos(delta_r) * math.cos(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.sin(theta) * (delta_r + theta))
-        C[2] = 1 / self.wheel_base_ * dt * (-math.cos(delta_f) * delta_f * v_f + math.cos(delta_r) * delta_r * v_r)
+        C[0] = 0
+        C[1] = 0
+        C[2] = 1 / self.wheel_base_ * dt * (v_f * math.cos(theta_f - theta) - v_r * math.cos(theta_r - theta)) * theta
         
         return A, B, C
 
