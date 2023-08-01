@@ -9,7 +9,6 @@ import sys
 import pathlib
 import csv
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
-import cubic_spline_planner
 
 
 def smooth_yaw(yaw):
