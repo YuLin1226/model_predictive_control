@@ -193,7 +193,7 @@ class MPC:
         self.horizon_ = horizon
         self.nx_ = nx
         self.nu_ = nu
-        self.gbm_ = GeneralBicycleModel(wheel_base=1, nx=nx, nu=nu)
+        self.gbm_ = GeneralBicycleModel(nx=nx, nu=nu)
         self.ddrm_ = DiffDrivedRobotModel()
         self.xy_tolerance_ = xy_tolerance
         self.stop_speed_ = stop_speed
@@ -400,7 +400,10 @@ class MPC:
 
         cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], self.Qf_)
 
-        constraints += [x[:, 0] == x0]
+
+        constraints += [x[0, 0] == x0[0]]
+        constraints += [x[1, 0] == x0[1]]
+        constraints += [x[2, 0] == x0[2]]
         constraints += [cvxpy.abs(u[0, :]) <= self.ackermann_max_speed_]
         constraints += [cvxpy.abs(u[2, :]) <= self.ackermann_max_speed_]
         constraints += [cvxpy.abs(u[1, :]) <= self.ackermann_max_steer_]
