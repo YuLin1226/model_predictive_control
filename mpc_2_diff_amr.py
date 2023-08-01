@@ -220,16 +220,13 @@ class MPC:
         self.viz_ = CarViz()
         self.show_animation_ = show_animation
 
-    def doSimulation(self, cx, cy, cyaw, initial_state, mode='ackermann', max_time=500, dt=0.2):
+    def doSimulation(self, cx, cy, cyaw, initial_state, initial_state_f, initial_state_r, mode='ackermann', max_time=500, dt=0.2):
 
         goal = [cx[-1], cy[-1]]
         state = initial_state
-        # initial yaw compensation
-        if state.yaw - cyaw[0] >= math.pi:
-            state.yaw -= math.pi * 2.0
-        elif state.yaw - cyaw[0] <= -math.pi:
-            state.yaw += math.pi * 2.0
-
+        state_f = initial_state_f
+        state_r = initial_state_r
+        
         time = 0.0
         x = [state.x]
         y = [state.y]
@@ -240,18 +237,22 @@ class MPC:
 
         t = [0.0]
         target_ind, _ = self.getNearestIndex(state, cx, cy, cyaw, 0)
-        ovf, ovr, osf, osr = None, None, None, None
+        ovf, ovr, owf, owr = None, None, None, None
         cyaw = smooth_yaw(cyaw)
 
         while max_time >= time:
-
-            x0 = [state.x, state.y, state.yaw] 
+            x0_f = [state_f.x, state_f.y, state_f.yaw]
+            x0_r = [state_r.x, state_r.y, state_r.yaw]
+            x0 = [state.x, state.y, state.yaw, x0_f, x0_r] 
             xref, target_ind = self.getReferenceTrajectory(state, cx, cy, cyaw, 2, target_ind)
-            ovf, ovr, osf, osr, ox, oy, oyaw = self.iterativeLMPC(xref, x0, ovf, ovr, osf, osr, mode)
+            ovf, ovr, owf, owr, ox, oy, oyaw = self.iterativeLMPC(xref, x0, ovf, ovr, owf, owr, mode)
 
             if ovf is not None:
-                vfi, vri, sfi, sri = ovf[0], ovr[0], osf[0], osr[0]
+                vfi, vri, wfi, wri = ovf[0], ovr[0], owf[0], owr[0]
+                vfi, vri, sfi, sri = self.gbm_.simulateWheelCommandFromDiffDriveRobotCommand(vfi, vri, state_f.yaw, state_r.yaw, state.yaw)
                 vxi, vyi, wi = self.gbm_.transformWheelCommandToRobotCommand(vfi, vri, sfi, sri)
+                state_f = self.ddrm_.updateState(state_f, vfi, wfi)
+                state_r = self.ddrm_.updateState(state_r, vri, wri)
                 state = self.gbm_.updateState(state, vxi, vyi, wi)
                 
             time = time + dt
