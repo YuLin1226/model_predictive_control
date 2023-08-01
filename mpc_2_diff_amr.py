@@ -100,8 +100,8 @@ class DiffDrivedRobotModel:
 
 class GeneralBicycleModel:
 
-    def __init__(self, wheel_base=1, nx=3, nu=4) -> None:
-        self.wheel_base_ = wheel_base
+    def __init__(self, nx=3, nu=4) -> None:
+
         self.nx_ = nx
         self.nu_ = nu
 
@@ -126,16 +126,16 @@ class GeneralBicycleModel:
         state.w = 1 / wheel_base * (state_f.vx * math.sin(state_f.yaw - state.yaw) + state_r.vx * math.sin(state_r.yaw - state.yaw))
         return state
 
-    def transformWheelCommandToRobotCommand(self, vf, vr, sf, sr):
+    def transformWheelCommandToRobotCommand(self, vf, vr, sf, sr, wheel_base=1):
         """
         Wheel Command: wheel speed & wheel steer
         Robot Command: Vx, Vy, W
         """
         H = np.array([
             [1, 0, 0],
-            [0, 1, self.wheel_base_/2],
+            [0, 1, wheel_base/2],
             [1, 0, 0],
-            [0, 1, -self.wheel_base_/2]
+            [0, 1, -wheel_base/2]
         ])
         km = np.linalg.inv((H.transpose() @ H)) @ H.transpose()
         v1x = math.cos(sf) * vf
@@ -161,7 +161,7 @@ class GeneralBicycleModel:
         return vf, vr, sf, sr
 
 
-    def getRobotModelMatrice(self, v_f, theta_f, v_r, theta_r, theta, dt=0.2):
+    def getRobotModelMatrice(self, v_f, theta_f, v_r, theta_r, theta, wheel_base=1, dt=0.2):
         """
         Robot Model: x(k+1) = A x(k) + B u(k) + C
         """
@@ -169,20 +169,20 @@ class GeneralBicycleModel:
         A = np.zeros((self.nx_, self.nx_))
         A[0, 0] = 1.0
         A[1, 1] = 1.0
-        A[2, 2] = 1.0 - 1 / self.wheel_base_ * dt * (v_f * math.cos(theta_f - theta) - v_r * math.cos(theta_r - theta))
+        A[2, 2] = 1.0 - 1 / wheel_base * dt * (v_f * math.cos(theta_f - theta) - v_r * math.cos(theta_r - theta))
         # Define B
         B = np.zeros((self.nx_, self.nu_))
         B[0, 0] = 1 / 2 * dt * math.cos(theta_f)
         B[0, 2] = 1 / 2 * dt * math.cos(theta_r)
         B[1, 0] = 1 / 2 * dt * math.sin(theta_f)
         B[1, 2] = 1 / 2 * dt * math.sin(theta_r)
-        B[2, 0] = 1 / self.wheel_base_ * dt * math.sin(theta_f - theta)
-        B[2, 2] = 1 / self.wheel_base_ * dt * math.sin(theta_r - theta)
+        B[2, 0] = 1 / wheel_base * dt * math.sin(theta_f - theta)
+        B[2, 2] = 1 / wheel_base * dt * math.sin(theta_r - theta)
         # Define C
         C = np.zeros(self.nx_)
         C[0] = 0
         C[1] = 0
-        C[2] = 1 / self.wheel_base_ * dt * (v_f * math.cos(theta_f - theta) - v_r * math.cos(theta_r - theta)) * theta
+        C[2] = 1 / wheel_base * dt * (v_f * math.cos(theta_f - theta) - v_r * math.cos(theta_r - theta)) * theta
         
         return A, B, C
 
