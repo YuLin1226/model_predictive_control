@@ -63,9 +63,13 @@ class CarViz:
     def vizOn(self):
         plt.show()
 
+    def plotTrajectory(self, cx, cy):
+        plt.plot(cx, cy, "k-")
+
+
     def showAnimation(self, ox, oy, cx, cy, x, y, xref, target_ind, state):
 
-        plt.cla()
+        # plt.cla()
         # for stopping simulation with the esc key.
         plt.gcf().canvas.mpl_connect('key_release_event', lambda event: [exit(0) if event.key == 'escape' else None])
         if ox is not None:
@@ -74,7 +78,7 @@ class CarViz:
         plt.plot(x, y, "ob", label="trajectory")
         plt.plot(xref[0, :], xref[1, :], "xk", label="xref")
         plt.plot(cx[target_ind], cy[target_ind], "xg", label="target")
-        self.plotCar(state.x, state.y, state.yaw)
+        # self.plotCar(state.x, state.y, state.yaw)
         plt.axis("equal")
         plt.grid(True)
         plt.pause(0.0001)
@@ -160,7 +164,7 @@ class GeneralBicycleModel:
 
 class MPC:
 
-    def __init__(self, horizon=5, nx=3, nu=4, xy_tolerance=1.5, stop_speed=0.2) -> None:
+    def __init__(self, horizon=5, nx=3, nu=4, xy_tolerance=1.5, stop_speed=0.2, show_animation=True) -> None:
         
         self.horizon_ = horizon
         self.nx_ = nx
@@ -192,8 +196,9 @@ class MPC:
 
         # Car viz
         self.viz_ = CarViz()
+        self.show_animation_ = show_animation
 
-    def doSimulation(self, cx, cy, cyaw, initial_state, max_time=500, dt=0.2):
+    def doSimulation(self, cx, cy, cyaw, initial_state, mode='ackermann', max_time=500, dt=0.2):
 
         goal = [cx[-1], cy[-1]]
         state = initial_state
@@ -220,7 +225,7 @@ class MPC:
 
             x0 = [state.x, state.y, state.yaw] 
             xref, target_ind = self.getReferenceTrajectory(state, cx, cy, cyaw, 2, target_ind)
-            ovf, ovr, osf, osr, ox, oy, oyaw = self.iterativeLMPC(xref, x0, ovf, ovr, osf, osr)
+            ovf, ovr, osf, osr, ox, oy, oyaw = self.iterativeLMPC(xref, x0, ovf, ovr, osf, osr, mode)
 
             if ovf is not None:
                 vfi, vri, sfi, sri = ovf[0], ovr[0], osf[0], osr[0]
@@ -241,10 +246,25 @@ class MPC:
                 print("Goal Reached.")
                 break
 
-            self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind, state)
+            if self.show_animation_:
+                self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind, state)
 
-        return t, x, y, yaw, vx, w
+        return t, x, y, yaw, vx, vy, w, state
 
+    def doSimulationWithAllMotionModes(self, idx_group, cx, cy, cyaw, cmode, initial_state, max_time=500, dt=0.2):
+        
+        self.viz_.plotTrajectory(cx, cy)
+
+        current_state = initial_state
+        for idx in idx_group:
+            lx = cx[idx[0] : idx[1] + 1]
+            ly = cy[idx[0] : idx[1] + 1]
+            lyaw = cyaw[idx[0] : idx[1] + 1]
+            lmode = cmode[idx[0]]
+            t, x, y, yaw, vx, vy, w, state = self.doSimulation(lx, ly, lyaw, current_state, lmode)
+            current_state = state
+
+    
     def predictMotion(self, x0, vf, vr, sf, sr, xref):
         
         xbar = xref * 0.0
@@ -261,7 +281,7 @@ class MPC:
 
         return xbar
 
-    def iterativeLMPC(self, xref, x0, ovf, ovr, osf, osr, max_iter=1):
+    def iterativeLMPC(self, xref, x0, ovf, ovr, osf, osr, mode='ackermann', max_iter=1):
         
         ox, oy, oyaw = None, None, None
         if ovf is None or ovr is None or osf is None or osr is None:
@@ -277,9 +297,15 @@ class MPC:
                 uref[2, i] = ovr[i]
                 uref[1, i] = osf[i]
                 uref[3, i] = osr[i]
-            # ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, x0, uref)
-            ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Differential(xref, xbar, x0, uref)
-            # ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Crab(xref, xbar, x0, uref)
+
+                if mode == 'ackermann':
+                    ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, x0, uref)
+                elif mode == 'diff':
+                    ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Differential(xref, xbar, x0, uref)
+                elif mode == 'crab':
+                    ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Crab(xref, xbar, x0, uref)
+                else:
+                    print("Mode not defined. ")
             
         return ovf, ovr, osf, osr, ox, oy, oyaw
 
@@ -535,12 +561,18 @@ class TrajectoryGenerator:
         node_lists = []
         with open(file_name, newline='') as csvfile:
             rows = csv.reader(csvfile)
-            n = 0
+            skip_first = True
             for row in rows:
-                if n == 0:
-                    n += 1
+                if skip_first:
+                    skip_first = False
                     continue
-                node_lists.append([float(e) for e in row])
+                node = []
+                for i, element in enumerate(row):    
+                    if i == 11:
+                        node.append(element)
+                    else:
+                        node.append(float(element))
+                node_lists.append(node)
         return node_lists
 
     def interpolateReference(self, node_lists, interpolate_num=5, mode='ackermann'):
@@ -580,6 +612,46 @@ class TrajectoryGenerator:
                     pts_y.append(y)
                     pts_yaw.append(yaw)
             return pts_x, pts_y, pts_yaw
+        
+    def interpolateReference2(self, node_lists, interpolate_num=5):
+
+        pts_x, pts_y, pts_yaw, pts_mode = [], [], [], []
+        for i in range(len(node_lists) - 1):
+            mode = node_lists[i+1][11]
+            if mode == 'ackermann' or mode == 'diff':
+                vx = node_lists[i+1][3]
+                vy = node_lists[i+1][4]
+                w  = node_lists[i+1][5]
+                if w == 0:
+                    continue
+                from_node = node_lists[i]
+                to_node   = node_lists[i+1]
+                for i in range(interpolate_num):
+                    icr = [-vy / w, vx / w]
+                    yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
+                    x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
+                    y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
+                    pts_x.append(x)
+                    pts_y.append(y)
+                    pts_yaw.append(yaw)
+                    pts_mode.append(mode)
+            
+            elif mode == 'crab':
+                vx = node_lists[i+1][3]
+                vy = node_lists[i+1][4]
+                w  = node_lists[i+1][5]
+                from_node = node_lists[i]
+                to_node   = node_lists[i+1]
+                for i in range(interpolate_num):
+                    yaw = from_node[2]
+                    x = from_node[0] + (to_node[0] - from_node[0]) / interpolate_num * i
+                    y = from_node[1] + (to_node[1] - from_node[1]) / interpolate_num * i
+                    pts_x.append(x)
+                    pts_y.append(y)
+                    pts_yaw.append(yaw)
+                    pts_mode.append(mode)
+
+        return pts_x, pts_y, pts_yaw, pts_mode
 
     def removeRepeatedPoints(self, cx, cy, cyaw, epsilon=0.00001):
 
@@ -598,6 +670,24 @@ class TrajectoryGenerator:
             ny.append(y)
             nyaw.append(yaw)
         return nx, ny, nyaw
+
+    def splitTrajectoryWithMotionModes(self, cmode):
+
+        trajectories_idx_group = []
+        from_idx, to_idx = None, None
+        current_mode = None
+        for i, mode in zip(range(len(cmode) - 1), cmode):
+            
+            if from_idx is None:
+                from_idx = i
+                current_mode = mode
+
+            if current_mode != cmode[i+1]:
+                to_idx = i
+                trajectories_idx_group.append([from_idx, to_idx])
+                from_idx, to_idx = None, None
+
+        return trajectories_idx_group
 
     def makeEightShapeTrajectory(self, size=10, n=121):
         x, y, yaw = [], [], []
@@ -627,7 +717,7 @@ def main1():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state)
 
 def main2():
 
@@ -644,7 +734,7 @@ def main2():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'ackermann')
 
 def main3():
 
@@ -661,7 +751,7 @@ def main3():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'crab')
 
 def main4():
 
@@ -678,11 +768,25 @@ def main4():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulation(cx, cy, cyaw, initial_state)
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'diff')
+
+def main5():
+
+    print(__file__ + " start...")
+
+    tg = TrajectoryGenerator()
+    ref = tg.retriveTrajectoryFromCSV('output.csv')
+    cx, cy, cyaw, cmode = tg.interpolateReference2(ref, 3)
+    idx_group = tg.splitTrajectoryWithMotionModes(cmode)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    mpc = MPC()
+    t, x, y, yaw, vx, w = mpc.doSimulationWithAllMotionModes(idx_group, cx, cy, cyaw, cmode, initial_state)
 
 
 if __name__ == '__main__':
-    main1() # 8 shaped / Ackermann Mode
+    # main1() # 8 shaped / Ackermann Mode
     # main2() # RRT / Ackermann Mode
     # main3() # RRT / Crab Mode
     # main4() # RRT / Diff Mode
+    main5()
