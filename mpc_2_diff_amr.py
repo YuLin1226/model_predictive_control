@@ -297,25 +297,41 @@ class MPC:
         x0 = [x, y, theta, [xf, yf, theta_f], [xr, yr, theta_r]]
         """
         xbar = xref * 0.0
+        xfbar = xref * 0.0
+        xrbar = xref * 0.0
+
         xbar[0, 0] = x0[0]
         xbar[1, 0] = x0[1]
         xbar[2, 0] = x0[2]
+        xfbar[0, 0] = x0[3][0]
+        xfbar[1, 0] = x0[3][1]
+        xfbar[2, 0] = x0[3][2]
+        xrbar[0, 0] = x0[4][0]
+        xrbar[1, 0] = x0[4][1]
+        xrbar[2, 0] = x0[4][2]
 
         state = State(x=x0[0], y=x0[1], yaw=x0[2])
         state_f = State(x=x0[3][0], y=x0[3][1], yaw=x0[3][2])
         state_r = State(x=x0[4][0], y=x0[4][1], yaw=x0[4][2])
         for (vfi, vri, wfi, wri, i) in zip(vf, vr, wf, wr, range(1, self.horizon_ + 1)):
 
+            wheel_base = math.sqrt((state_f.x - state_r.x)**2 + (state_f.y - state_r.y)**2)
             vfi, vri, sfi, sri = self.gbm_.simulateWheelCommandFromDiffDriveRobotCommand(vfi, vri, state_f.yaw, state_r.yaw, state.yaw)
-            vx, vy, w = self.gbm_.transformWheelCommandToRobotCommand(vfi, vri, sfi, sri)
+            vx, vy, w = self.gbm_.transformWheelCommandToRobotCommand(vfi, vri, sfi, sri, wheel_base)
             state_f = self.ddrm_.updateState(state_f, vfi, wfi)
             state_r = self.ddrm_.updateState(state_r, vri, wri)
             state = self.gbm_.updateState(state, vx, vy, w)
             xbar[0, i] = state.x
             xbar[1, i] = state.y
             xbar[2, i] = state.yaw
+            xfbar[0, i] = state_f.x
+            xfbar[1, i] = state_f.y
+            xfbar[2, i] = state_f.yaw
+            xrbar[0, i] = state_r.x
+            xrbar[1, i] = state_r.y
+            xrbar[2, i] = state_r.yaw
 
-        return xbar
+        return xbar, xfbar, xrbar
 
     def iterativeLMPC(self, xref, x0, ovf, ovr, owf, owr, mode='ackermann', max_iter=1):
         
@@ -327,7 +343,7 @@ class MPC:
             owr = [0.0] * self.horizon_
         uref = np.zeros((self.nu_, self.horizon_))
         for i in range(max_iter):
-            xbar = self.predictMotion(x0, ovf, ovr, owf, owr, xref)
+            xbar, xfbar, xrbar = self.predictMotion(x0, ovf, ovr, owf, owr, xref)
             for i in range(self.horizon_):
                 uref[0, i] = ovf[i]
                 uref[2, i] = ovr[i]
@@ -345,7 +361,7 @@ class MPC:
             
         return ovf, ovr, owf, owr, ox, oy, oyaw
 
-    def doLMPC_Ackermann(self, xref, xbar, x0, uref, dt=0.2):
+    def doLMPC_Ackermann(self, xref, xbar, xfbar, xrbar, x0, uref, dt=0.2):
         
         x = cvxpy.Variable((self.nx_, self.horizon_ + 1))
         u = cvxpy.Variable((self.nu_, self.horizon_))
@@ -359,14 +375,15 @@ class MPC:
             if t != 0:
                 cost += cvxpy.quad_form(xref[:, t] - x[:, t], self.Q_)
 
-            
-
+            wheel_base = math.sqrt((xfbar[0, t] - xrbar[0, t])**2+(xfbar[1, t] - xrbar[1, t])**2)
             A, B, C = self.gbm_.getRobotModelMatrice(
-                theta=xbar[2, t],
                 v_f=uref[0, t],
+                theta_f=xfbar[2, t],
                 v_r=uref[2, t],
-                delta_f=uref[1, t],
-                delta_r=uref[3, t])
+                theta_r=xrbar[2, t],
+                theta=xbar[2, t],
+                wheel_base=wheel_base
+                )
         
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
