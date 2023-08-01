@@ -351,7 +351,7 @@ class MPC:
                 uref[3, i] = owr[i]
 
                 if mode == 'ackermann':
-                    ovf, ovr, owf, owr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, x0, uref)
+                    ovf, ovr, owf, owr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, xfbar, xrbar, x0, uref)
                 elif mode == 'diff':
                     ovf, ovr, owf, owr, ox, oy, oyaw = self.doLMPC_Differential(xref, xbar, x0, uref)
                 elif mode == 'crab':
@@ -405,8 +405,10 @@ class MPC:
         constraints += [cvxpy.abs(u[2, :]) <= self.ackermann_max_speed_]
         constraints += [cvxpy.abs(u[1, :]) <= self.ackermann_max_steer_]
         constraints += [cvxpy.abs(u[3, :]) <= self.ackermann_max_steer_]
-        constraints += [u[1, :] == -u[3, :]]
-        constraints += [u[0, :] == u[2, :]]
+
+        # I think w should be with different sign.
+        # constraints += [u[1, :] == -u[3, :]]
+        # constraints += [u[0, :] == u[2, :]]
 
         prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
         prob.solve(solver=cvxpy.ECOS, verbose=False)
@@ -417,8 +419,8 @@ class MPC:
             oyaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
             ovf = np.array(u.value[0, :]).flatten()
             ovr = np.array(u.value[2, :]).flatten()
-            osf = np.array(u.value[1, :]).flatten()
-            osr = np.array(u.value[3, :]).flatten()
+            owf = np.array(u.value[1, :]).flatten()
+            owr = np.array(u.value[3, :]).flatten()
 
         else:
             print("Error: Cannot solve mpc..")
@@ -427,10 +429,10 @@ class MPC:
             oyaw = None
             ovf = None
             ovr = None
-            osf = None
-            osr = None
+            owf = None
+            owr = None
 
-        return ovf, ovr, osf, osr, ox, oy, oyaw
+        return ovf, ovr, owf, owr, ox, oy, oyaw
 
     def doLMPC_Differential(self, xref, xbar, x0, uref, dt=0.2):
         
@@ -847,8 +849,8 @@ def main5():
 
 
 if __name__ == '__main__':
-    # main1() # 8 shaped / Ackermann Mode
+    main1() # 8 shaped / Ackermann Mode
     # main2() # RRT / Ackermann Mode
     # main3() # RRT / Crab Mode
     # main4() # RRT / Diff Mode
-    main5()
+    # main5()
