@@ -105,17 +105,7 @@ class GeneralBicycleModel:
         self.nx_ = nx
         self.nu_ = nu
 
-    def updateState(self, state, vx, vy, w, dt=0.2):
-        
-        state.x = state.x + vx * math.cos(state.yaw) * dt - vy * math.sin(state.yaw) * dt
-        state.y = state.y + vx * math.sin(state.yaw) * dt + vy * math.cos(state.yaw) * dt
-        state.yaw = state.yaw + w * dt
-        state.vx = vx
-        state.vy = vy
-        state.w = w
-        return state
-
-    def updateStateFromDiffDriveRobotState(self, state, state_f, state_r):
+    def updateState(self, state:State, state_f:State, state_r:State):
         
         wheel_base = math.sqrt((state_f.y - state_f.y)**2 + (state_f.x - state_r.x)**2)
         state.x = (state_f.x + state_r.x) / 2
@@ -153,15 +143,8 @@ class GeneralBicycleModel:
         vy = float(vi[1])
         w = float(vi[2])
         return vx, vy, w
-    
-    def simulateWheelCommandFromDiffDriveRobotCommand(self, vf, vr, theta_f, theta_r, theta):
 
-        sf = theta_f - theta
-        sr = theta_r - theta
-        return vf, vr, sf, sr
-
-
-    def getRobotModelMatrice(self, x, y, theta, x_f, y_f, theta_f, x_r, y_r, theta_r, v_f, v_r, w_f, w_r,  wheel_base=1, dt=0.2):
+    def getRobotModelMatrice(self, x, y, theta, x_f, y_f, theta_f, x_r, y_r, theta_r, v_f, v_r, w_f, w_r, dt=0.2):
         """
         Robot Model: x(k+1) = A x(k) + B u(k) + C
         """
@@ -221,7 +204,7 @@ class GeneralBicycleModel:
 
 class MPC:
 
-    def __init__(self, horizon=5, nx=3, nu=4, xy_tolerance=1.5, stop_speed=0.2, show_animation=True) -> None:
+    def __init__(self, horizon=5, nx=9, nu=4, xy_tolerance=1.5, stop_speed=0.2, show_animation=True) -> None:
         
         self.horizon_ = horizon
         self.nx_ = nx
@@ -249,14 +232,14 @@ class MPC:
         # Cost parameters
         self.R_  = np.diag([0.01, 0.01, 0.01, 0.01])
         self.Rd_ = np.diag([0.01, 0.01, 0.01, 0.01]) # Unused.
-        self.Q_  = np.diag([1.0, 1.0, 0.5])
-        self.Qf_ = np.diag([1.0, 1.0, 0.5])
+        self.Q_  = np.diag([1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0])
+        self.Qf_ = np.diag([1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0])
 
         # Car viz
         self.viz_ = CarViz()
         self.show_animation_ = show_animation
 
-    def doSimulation(self, cx, cy, cyaw, initial_state, initial_state_f, initial_state_r, mode='ackermann', max_time=500, dt=0.2):
+    def doSimulation(self, cx, cy, cyaw, initial_state:State, initial_state_f:State, initial_state_r:State, mode='ackermann', max_time=500, dt=0.2):
 
         goal = [cx[-1], cy[-1]]
         state = initial_state
@@ -277,17 +260,15 @@ class MPC:
         cyaw = smooth_yaw(cyaw)
 
         while max_time >= time:
-            x0_f = [state_f.x, state_f.y, state_f.yaw]
-            x0_r = [state_r.x, state_r.y, state_r.yaw]
-            x0 = [state.x, state.y, state.yaw, x0_f, x0_r] 
+            x0 = [state.x, state.y, state.yaw, state_f.x, state_f.y, state_f.yaw, state_r.x, state_r.y, state_r.yaw,] 
             xref, target_ind = self.getReferenceTrajectory(state, cx, cy, cyaw, 2, target_ind)
             ovf, ovr, owf, owr, ox, oy, oyaw = self.iterativeLMPC(xref, x0, ovf, ovr, owf, owr, mode)
 
             if ovf is not None:
-                vfi, vri, wfi, wri = ovf[0], ovr[0], owf[0], owr[0]
-                state_f = self.ddrm_.updateState(state_f, vfi, wfi)
-                state_r = self.ddrm_.updateState(state_r, vri, wri)
-                state = self.gbm_.updateStateFromDiffDriveRobotState(state, state_f, state_r)
+                vf, vr, wf, wr = ovf[0], ovr[0], owf[0], owr[0]
+                state_f = self.ddrm_.updateState(state=state_f, vx=vf, w=wf)
+                state_r = self.ddrm_.updateState(state=state_r, vx=vr, w=wr)
+                state = self.gbm_.updateState(state=state, state_f=state_f, state_r=state_r)
                 
             time = time + dt
 
@@ -325,41 +306,32 @@ class MPC:
     
     def predictMotion(self, x0, vf, vr, wf, wr, xref):
         """
-        x0 = [x, y, theta, [xf, yf, theta_f], [xr, yr, theta_r]]
+        x0 = [x, y, theta, xf, yf, theta_f, xr, yr, theta_r]
         """
         xbar = xref * 0.0
-        xfbar = xref * 0.0
-        xrbar = xref * 0.0
+        for i, _ in enumerate(x0):
+            xbar[i, 0] = x0[i]
 
-        xbar[0, 0] = x0[0]
-        xbar[1, 0] = x0[1]
-        xbar[2, 0] = x0[2]
-        xfbar[0, 0] = x0[3][0]
-        xfbar[1, 0] = x0[3][1]
-        xfbar[2, 0] = x0[3][2]
-        xrbar[0, 0] = x0[4][0]
-        xrbar[1, 0] = x0[4][1]
-        xrbar[2, 0] = x0[4][2]
 
         state = State(x=x0[0], y=x0[1], yaw=x0[2])
-        state_f = State(x=x0[3][0], y=x0[3][1], yaw=x0[3][2])
-        state_r = State(x=x0[4][0], y=x0[4][1], yaw=x0[4][2])
+        state_f = State(x=x0[3], y=x0[4], yaw=x0[5])
+        state_r = State(x=x0[6], y=x0[7], yaw=x0[8])
         for (vfi, vri, wfi, wri, i) in zip(vf, vr, wf, wr, range(1, self.horizon_ + 1)):
 
-            state_f = self.ddrm_.updateState(state_f, vfi, wfi)
-            state_r = self.ddrm_.updateState(state_r, vri, wri)
-            state = self.gbm_.updateStateFromDiffDriveRobotState(state, state_f, state_r)
+            state_f = self.ddrm_.updateState(state=state_f, vx=vfi, w=wfi)
+            state_r = self.ddrm_.updateState(state=state_r, vx=vri, w=wri)
+            state = self.gbm_.updateState(state=state, state_f=state_f, state_r=state_r)
             xbar[0, i] = state.x
             xbar[1, i] = state.y
             xbar[2, i] = state.yaw
-            xfbar[0, i] = state_f.x
-            xfbar[1, i] = state_f.y
-            xfbar[2, i] = state_f.yaw
-            xrbar[0, i] = state_r.x
-            xrbar[1, i] = state_r.y
-            xrbar[2, i] = state_r.yaw
+            xbar[3, i] = state_f.x
+            xbar[4, i] = state_f.y
+            xbar[5, i] = state_f.yaw
+            xbar[6, i] = state_r.x
+            xbar[7, i] = state_r.y
+            xbar[8, i] = state_r.yaw
 
-        return xbar, xfbar, xrbar
+        return xbar
 
     def iterativeLMPC(self, xref, x0, ovf, ovr, owf, owr, mode='ackermann', max_iter=1):
         
@@ -371,7 +343,7 @@ class MPC:
             owr = [0.0] * self.horizon_
         uref = np.zeros((self.nu_, self.horizon_))
         for i in range(max_iter):
-            xbar, xfbar, xrbar = self.predictMotion(x0, ovf, ovr, owf, owr, xref)
+            xbar = self.predictMotion(x0=x0, vf=ovf, vr=ovr, wf=owf, wr=owr, xref=xref)
             for i in range(self.horizon_):
                 uref[0, i] = ovf[i]
                 uref[2, i] = ovr[i]
@@ -379,7 +351,7 @@ class MPC:
                 uref[3, i] = owr[i]
 
                 if mode == 'ackermann':
-                    ovf, ovr, owf, owr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, xfbar, xrbar, x0, uref)
+                    ovf, ovr, owf, owr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, x0, uref)
                 elif mode == 'diff':
                     ovf, ovr, owf, owr, ox, oy, oyaw = self.doLMPC_Differential(xref, xbar, x0, uref)
                 elif mode == 'crab':
@@ -389,7 +361,7 @@ class MPC:
             
         return ovf, ovr, owf, owr, ox, oy, oyaw
 
-    def doLMPC_Ackermann(self, xref, xbar, xfbar, xrbar, x0, uref, dt=0.2):
+    def doLMPC_Ackermann(self, xref, xbar, x0, uref, dt=0.2):
         
         x = cvxpy.Variable((self.nx_, self.horizon_ + 1))
         u = cvxpy.Variable((self.nu_, self.horizon_))
@@ -403,14 +375,21 @@ class MPC:
             if t != 0:
                 cost += cvxpy.quad_form(xref[:, t] - x[:, t], self.Q_)
 
-            wheel_base = math.sqrt((xfbar[0, t] - xrbar[0, t])**2+(xfbar[1, t] - xrbar[1, t])**2)
+            wheel_base = math.sqrt((xbar[3, t] - xbar[6, t])**2+(xbar[4, t] - xbar[7, t])**2)
             A, B, C = self.gbm_.getRobotModelMatrice(
-                v_f=uref[0, t],
-                theta_f=xfbar[2, t],
-                v_r=uref[2, t],
-                theta_r=xrbar[2, t],
-                theta=xbar[2, t],
-                wheel_base=wheel_base
+                x = xbar[0, t],
+                y = xbar[1, t],
+                theta = xbar[2, t],
+                x_f = xbar[3, t],
+                y_f = xbar[4, t],
+                theta_f = xbar[4, t],
+                x_r = xbar[5, t],
+                y_r = xbar[6, t],
+                theta_r = xbar[7, t],
+                v_f = uref[0, t],
+                v_r = uref[2, t],
+                w_f = uref[1, t],
+                w_r = uref[3, t]
                 )
         
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
@@ -603,7 +582,7 @@ class MPC:
         mind = math.sqrt(mind)
         return ind, mind
 
-    def getReferenceTrajectory(self, state, cx, cy, cyaw, n_search_ind, pind):
+    def getReferenceTrajectory(self, state, cx, cy, cyaw, n_search_ind, pind, wheel_base=1):
         
         xref = np.zeros((self.nx_, self.horizon_ + 1))
         ind, _ = self.getNearestIndex(state, cx, cy, cyaw, pind)
@@ -618,10 +597,18 @@ class MPC:
                 xref[0, i] = feasible_cx[i]
                 xref[1, i] = feasible_cy[i]
                 xref[2, i] = feasible_cyaw[i]
+                xref[3, i] = xref[0, i] + wheel_base * math.cos(xref[2, i])
+                xref[4, i] = xref[1, i] + wheel_base * math.sin(xref[2, i])
+                xref[6, i] = xref[0, i] - wheel_base * math.cos(xref[2, i])
+                xref[7, i] = xref[1, i] - wheel_base * math.sin(xref[2, i])
             else:
                 xref[0, i] = feasible_cx[ncourse - 1]
                 xref[1, i] = feasible_cy[ncourse - 1]
                 xref[2, i] = feasible_cyaw[ncourse - 1]
+                xref[3, i] = xref[0, i] + wheel_base * math.cos(xref[2, i])
+                xref[4, i] = xref[1, i] + wheel_base * math.sin(xref[2, i])
+                xref[6, i] = xref[0, i] - wheel_base * math.cos(xref[2, i])
+                xref[7, i] = xref[1, i] - wheel_base * math.sin(xref[2, i])
         return xref, ind
     
     def checkGoal(self, state, goal, tind, nind):
@@ -797,11 +784,11 @@ def main1():
     tg = TrajectoryGenerator()
     cx, cy, cyaw = tg.makeEightShapeTrajectory()
     xc, yc, yawc = cx[0], cy[0], cyaw[0]
-    xf = xc + gbm_length * math.cos(yawc)
-    yf = yc + gbm_length * math.sin(yawc)
+    xf = xc + gbm_length * math.cos(yawc) / 2
+    yf = yc + gbm_length * math.sin(yawc) / 2
     yawf = yawc
-    xr = xc - gbm_length * math.cos(yawc)
-    yr = yc - gbm_length * math.sin(yawc)
+    xr = xc - gbm_length * math.cos(yawc) / 2
+    yr = yc - gbm_length * math.sin(yawc) / 2
     yawr = yawc
     initial_state = State(x=xc, y=yc, yaw=yawc)
     initial_state_f = State(x=xf, y=yf, yaw=yawf)
