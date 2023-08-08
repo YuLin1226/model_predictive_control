@@ -100,7 +100,7 @@ class DiffDrivedRobotModel:
 
 class GeneralBicycleModel:
 
-    def __init__(self, nx=3, nu=4) -> None:
+    def __init__(self, nx=9, nu=4) -> None:
 
         self.nx_ = nx
         self.nu_ = nu
@@ -161,29 +161,62 @@ class GeneralBicycleModel:
         return vf, vr, sf, sr
 
 
-    def getRobotModelMatrice(self, v_f, theta_f, v_r, theta_r, theta, wheel_base=1, dt=0.2):
+    def getRobotModelMatrice(self, x, y, theta, x_f, y_f, theta_f, x_r, y_r, theta_r, v_f, v_r, w_f, w_r,  wheel_base=1, dt=0.2):
         """
         Robot Model: x(k+1) = A x(k) + B u(k) + C
         """
+        # Define L bar
+        L = math.sqrt((x_f - x_r)**2 + (y_f - y_r)**2)
+        # Define K bar
+        K = v_f * math.sin(theta_f - theta) - v_r * math.sin(theta_r - theta)
         # Define A
         A = np.zeros((self.nx_, self.nx_))
-        A[0, 0] = 1.0
-        A[1, 1] = 1.0
-        A[2, 2] = 1.0 - 1 / wheel_base * dt * (v_f * math.cos(theta_f - theta) - v_r * math.cos(theta_r - theta))
+        A[0, 0] = 1
+        A[0, 5] = -dt * v_f * math.sin(theta_f) / 2
+        A[0, 8] = -dt * v_r * math.sin(theta_r) / 2
+        A[1, 1] = 1
+        A[1, 5] = dt * v_f * math.cos(theta_f) / 2
+        A[1, 8] = dt * v_r * math.cos(theta_r) / 2
+        A[2, 2] = 1 + dt * (-v_f * math.cos(theta_f - theta) + v_r * math.cos(theta_r - theta)) / L
+        A[2, 3] = -dt * (x_f - x_r) * ( L ** (-3) ) * K
+        A[2, 4] = -dt * (y_f - y_r) * ( L ** (-3) ) * K
+        A[2, 5] = dt * v_f * math.cos(theta_f - theta) / L
+        A[2, 6] = dt * (x_f - x_r) * ( L ** (-3) ) * K
+        A[2, 7] = dt * (y_f - y_r) * ( L ** (-3) ) * K
+        A[2, 8] = dt * v_r * math.cos(theta_r - theta) / L
+        A[3, 3] = 1
+        A[3, 5] = -dt * v_f * math.sin(theta_f)
+        A[4, 4] = 1
+        A[4, 5] = dt * v_f * math.cos(theta_f)
+        A[5, 5] = 1
+        A[6, 5] = -dt * v_r * math.sin(theta_r)
+        A[6, 6] = 1
+        A[7, 5] = dt * v_r * math.cos(theta_r)
+        A[7, 7] = 1
+        A[8, 8] = 1
         # Define B
         B = np.zeros((self.nx_, self.nu_))
         B[0, 0] = 1 / 2 * dt * math.cos(theta_f)
         B[0, 2] = 1 / 2 * dt * math.cos(theta_r)
         B[1, 0] = 1 / 2 * dt * math.sin(theta_f)
         B[1, 2] = 1 / 2 * dt * math.sin(theta_r)
-        B[2, 0] = 1 / wheel_base * dt * math.sin(theta_f - theta)
-        B[2, 2] = 1 / wheel_base * dt * math.sin(theta_r - theta)
+        B[2, 0] = 1 / L * dt * math.sin(theta_f - theta)
+        B[2, 2] = 1 / L * dt * math.sin(theta_r - theta)
+        B[3, 0] = dt * math.cos(theta_f)
+        B[4, 0] = dt * math.sin(theta_f)
+        B[5, 1] = 1
+        B[6, 2] = dt * math.cos(theta_r)
+        B[7, 2] = dt * math.sin(theta_r)
+        B[8, 3] = 1
         # Define C
         C = np.zeros(self.nx_)
-        C[0] = 0
-        C[1] = 0
-        C[2] = 1 / wheel_base * dt * (v_f * math.cos(theta_f - theta) - v_r * math.cos(theta_r - theta)) * theta
-        
+        C[0] = dt / 2 * (v_f * theta_f * math.sin(theta_f) + v_r * theta_r * math.sin(theta_r))
+        C[1] = -dt / 2 * (v_f * theta_f * math.cos(theta_f) + v_r * theta_r * math.cos(theta_r))
+        C[2] = dt / L * ((theta_r - theta) * v_r * math.cos(theta_r - theta) - (theta_f - theta) * v_f * math.cos(theta_f - theta) + K)
+        C[3] = dt * v_f * theta_f * math.sin(theta_f)
+        C[4] = -dt * v_f * theta_f * math.cos(theta_f)
+        C[6] = dt * v_r * theta_r * math.sin(theta_r)
+        C[7] = -dt * v_r * theta_r * math.cos(theta_r)
         return A, B, C
 
 class MPC:
