@@ -187,10 +187,10 @@ class GeneralBicycleModel:
         B[2, 2] = 1 / L * dt * math.sin(theta_r - theta)
         B[3, 0] = dt * math.cos(theta_f)
         B[4, 0] = dt * math.sin(theta_f)
-        B[5, 1] = 1
+        B[5, 1] = dt
         B[6, 2] = dt * math.cos(theta_r)
         B[7, 2] = dt * math.sin(theta_r)
-        B[8, 3] = 1
+        B[8, 3] = dt
         # Define C
         C = np.zeros(self.nx_)
         C[0] = dt / 2 * (v_f * theta_f * math.sin(theta_f) + v_r * theta_r * math.sin(theta_r))
@@ -215,10 +215,10 @@ class MPC:
         self.stop_speed_ = stop_speed
 
         # constraints setting - ackermann mode
-        self.ackermann_steer_inc_rate_ = np.deg2rad(45)
+        self.ackermann_steer_inc_rate_ = np.deg2rad(90)
         self.ackermann_speed_inc_rate_ = 0.2
-        self.ackermann_max_speed_ = 0.47
-        self.ackermann_max_steer_ = np.deg2rad(45)
+        self.ackermann_max_speed_ = 0.3
+        self.ackermann_max_steer_ = np.deg2rad(90)
         # constraints setting - differential mode
         self.differential_speed_inc_rate_ = 0.2
         self.differential_fixed_steer_ = np.deg2rad(90)
@@ -232,8 +232,8 @@ class MPC:
         # Cost parameters
         self.R_  = np.diag([0.01, 0.01, 0.01, 0.01])
         self.Rd_ = np.diag([0.01, 0.01, 0.01, 0.01]) # Unused.
-        self.Q_  = np.diag([1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0])
-        self.Qf_ = np.diag([1.0, 1.0, 0.5, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0])
+        self.Q_  = np.diag([1.0, 1.0, 0.5, 0, 0, 0.0, 0, 0, 0.0])
+        self.Qf_ = np.diag([1.0, 1.0, 0.5, 0, 0, 0.0, 0, 0, 0.0])
 
         # Car viz
         self.viz_ = CarViz()
@@ -375,17 +375,16 @@ class MPC:
             if t != 0:
                 cost += cvxpy.quad_form(xref[:, t] - x[:, t], self.Q_)
 
-            wheel_base = math.sqrt((xbar[3, t] - xbar[6, t])**2+(xbar[4, t] - xbar[7, t])**2)
             A, B, C = self.gbm_.getRobotModelMatrice(
                 x = xbar[0, t],
                 y = xbar[1, t],
                 theta = xbar[2, t],
                 x_f = xbar[3, t],
                 y_f = xbar[4, t],
-                theta_f = xbar[4, t],
-                x_r = xbar[5, t],
-                y_r = xbar[6, t],
-                theta_r = xbar[7, t],
+                theta_f = xbar[5, t],
+                x_r = xbar[6, t],
+                y_r = xbar[7, t],
+                theta_r = xbar[8, t],
                 v_f = uref[0, t],
                 v_r = uref[2, t],
                 w_f = uref[1, t],
@@ -394,16 +393,17 @@ class MPC:
         
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
-            if t < (self.horizon_ - 1):
-                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.ackermann_speed_inc_rate_ * dt]
-                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.ackermann_speed_inc_rate_ * dt]
-                constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.ackermann_steer_inc_rate_ * dt]
-                constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= self.ackermann_steer_inc_rate_ * dt]
+            # if t < (self.horizon_ - 1):
+            #     constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.ackermann_speed_inc_rate_ * dt]
+            #     constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.ackermann_speed_inc_rate_ * dt]
+            #     constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.ackermann_steer_inc_rate_ * dt]
+            #     constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= self.ackermann_steer_inc_rate_ * dt]
 
-            if t == 0:
-                constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= self.ackermann_steer_inc_rate_ * dt]
-                constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= self.ackermann_steer_inc_rate_ * dt]
-
+            # if t == 0:
+            #     constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= self.ackermann_steer_inc_rate_ * dt]
+            #     constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= self.ackermann_steer_inc_rate_ * dt]
+            # if t != 0:
+            #     constraints += [x[5, t] == -x[8, t]]
 
         cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], self.Qf_)
 
@@ -411,6 +411,12 @@ class MPC:
         constraints += [x[0, 0] == x0[0]]
         constraints += [x[1, 0] == x0[1]]
         constraints += [x[2, 0] == x0[2]]
+        constraints += [x[3, 0] == x0[3]]
+        constraints += [x[4, 0] == x0[4]]
+        constraints += [x[5, 0] == x0[5]]
+        constraints += [x[6, 0] == x0[6]]
+        constraints += [x[7, 0] == x0[7]]
+        constraints += [x[8, 0] == x0[8]]
         constraints += [cvxpy.abs(u[0, :]) <= self.ackermann_max_speed_]
         constraints += [cvxpy.abs(u[2, :]) <= self.ackermann_max_speed_]
         constraints += [cvxpy.abs(u[1, :]) <= self.ackermann_max_steer_]
