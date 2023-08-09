@@ -781,6 +781,51 @@ class TrajectoryGenerator:
             yaw.append(ptyaw)
         return x ,y, yaw
     
+    def makeEightShapeTrajectoryWithCurvature(self, size=10, n=121):
+        x, y, yaw = [], [], []
+        curvature = []
+        for i in range(n):
+            ptx = 0.8 * math.sin(2 * math.pi / 60 * i) * size
+            pty = math.sin(1 * math.pi / 60 * i) * size
+            dx = 0.8 * math.cos(2 * math.pi / 60 * i) * 2 * math.pi / 60
+            dy = math.cos(1 * math.pi / 60 * i) * 1 * math.pi / 60
+            ptyaw = math.atan2(dy, dx)
+            x.append(ptx)
+            y.append(pty)
+            yaw.append(ptyaw)
+
+            ddx = 0.8 * math.sin(2 * math.pi / 60 * i) * 2 * math.pi / 60 * (-1) * 2 * math.pi / 60
+            ddy = math.cos(1 * math.pi / 60 * i) * 1 * math.pi / 60 * (-1) * 1 * math.pi / 60
+            k = (dx * ddy - ddx * dy) / ( (dx**2 + dy**2)**(1.5) )
+            curvature.append(k)
+        return x ,y, yaw, curvature
+
+
+    def getFrontAndRearTrajectories(self, cx, cy, cyaw, curvature, wheel_base):
+
+        cx_f, cy_f, cyaw_f = [], [], []
+        cx_r, cy_r, cyaw_r = [], [], []
+
+        for x, y, yaw, k in zip(cx, cy, cyaw, curvature):
+
+            r = 1 / k
+            yaw_f = yaw + math.atan(wheel_base / 2 / r)
+            yaw_r = yaw - math.atan(wheel_base / 2 / r)
+            x_f = x + math.cos(yaw) * wheel_base / 2
+            x_r = x - math.cos(yaw) * wheel_base / 2
+            y_f = y + math.sin(yaw) * wheel_base / 2
+            y_r = y - math.sin(yaw) * wheel_base / 2
+
+            cx_f.append(x_f)
+            cy_f.append(y_f)
+            cyaw_f.append(yaw_f)
+            cx_r.append(x_r)
+            cy_r.append(y_r)
+            cyaw_r.append(yaw_r)
+
+        return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+
+
 
 def main1():
 
