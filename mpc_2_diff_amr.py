@@ -239,7 +239,7 @@ class MPC:
         self.viz_ = CarViz()
         self.show_animation_ = show_animation
 
-    def doSimulation(self, cx, cy, cyaw, initial_state:State, initial_state_f:State, initial_state_r:State, mode='ackermann', max_time=500, dt=0.2):
+    def doSimulation(self, cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r, initial_state:State, initial_state_f:State, initial_state_r:State, mode='ackermann', max_time=500, dt=0.2):
 
         goal = [cx[-1], cy[-1]]
         state = initial_state
@@ -261,7 +261,7 @@ class MPC:
 
         while max_time >= time:
             x0 = [state.x, state.y, state.yaw, state_f.x, state_f.y, state_f.yaw, state_r.x, state_r.y, state_r.yaw,] 
-            xref, target_ind = self.getReferenceTrajectory(state, cx, cy, cyaw, 2, target_ind)
+            xref, target_ind = self.getReferenceTrajectory(state, cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r, 2, target_ind)
             ovf, ovr, owf, owr, ox, oy, oyaw = self.iterativeLMPC(xref, x0, ovf, ovr, owf, owr, mode)
 
             if ovf is not None:
@@ -588,7 +588,7 @@ class MPC:
         mind = math.sqrt(mind)
         return ind, mind
 
-    def getReferenceTrajectory(self, state, cx, cy, cyaw, n_search_ind, pind, wheel_base=1):
+    def getReferenceTrajectory(self, state, cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r, n_search_ind, pind, wheel_base=1):
         
         xref = np.zeros((self.nx_, self.horizon_ + 1))
         ind, _ = self.getNearestIndex(state, cx, cy, cyaw, pind)
@@ -597,25 +597,56 @@ class MPC:
         feasible_cx = cx[ind: ind + n_search_ind]
         feasible_cy = cy[ind: ind + n_search_ind]
         feasible_cyaw = cyaw[ind: ind + n_search_ind]
+        feasible_cx_f = cx_f[ind: ind + n_search_ind]
+        feasible_cy_f = cy_f[ind: ind + n_search_ind]
+        feasible_cyaw_f = cyaw_f[ind: ind + n_search_ind]
+        feasible_cx_r = cx_r[ind: ind + n_search_ind]
+        feasible_cy_r = cy_r[ind: ind + n_search_ind]
+        feasible_cyaw_r = cyaw_r[ind: ind + n_search_ind]
         ncourse = len(feasible_cx)
         for i in range(self.horizon_ + 1):
             if i < ncourse:
                 xref[0, i] = feasible_cx[i]
                 xref[1, i] = feasible_cy[i]
                 xref[2, i] = feasible_cyaw[i]
-                xref[3, i] = xref[0, i] + wheel_base * math.cos(xref[2, i])
-                xref[4, i] = xref[1, i] + wheel_base * math.sin(xref[2, i])
-                xref[6, i] = xref[0, i] - wheel_base * math.cos(xref[2, i])
-                xref[7, i] = xref[1, i] - wheel_base * math.sin(xref[2, i])
+                xref[3, i] = feasible_cx_f[i]
+                xref[4, i] = feasible_cy_f[i]
+                xref[5, i] = feasible_cyaw_f[i]
+                xref[6, i] = feasible_cx_r[i]
+                xref[7, i] = feasible_cy_r[i]
+                xref[8, i] = feasible_cyaw_r[i]
             else:
                 xref[0, i] = feasible_cx[ncourse - 1]
                 xref[1, i] = feasible_cy[ncourse - 1]
                 xref[2, i] = feasible_cyaw[ncourse - 1]
-                xref[3, i] = xref[0, i] + wheel_base * math.cos(xref[2, i])
-                xref[4, i] = xref[1, i] + wheel_base * math.sin(xref[2, i])
-                xref[6, i] = xref[0, i] - wheel_base * math.cos(xref[2, i])
-                xref[7, i] = xref[1, i] - wheel_base * math.sin(xref[2, i])
+                xref[3, i] = feasible_cx_f[ncourse - 1]
+                xref[4, i] = feasible_cy_f[ncourse - 1]
+                xref[5, i] = feasible_cyaw_f[ncourse - 1]
+                xref[6, i] = feasible_cx_r[ncourse - 1]
+                xref[7, i] = feasible_cy_r[ncourse - 1]
+                xref[8, i] = feasible_cyaw_r[ncourse - 1]
         return xref, ind
+    
+        # for i in range(self.horizon_ + 1):
+        #     if i < ncourse:
+        #         xref[0, i] = feasible_cx[i]
+        #         xref[1, i] = feasible_cy[i]
+        #         xref[2, i] = feasible_cyaw[i]
+        #         xref[3, i] = xref[0, i] + (wheel_base / 2) * math.cos(xref[2, i])
+        #         xref[4, i] = xref[1, i] + (wheel_base / 2) * math.sin(xref[2, i])
+        #         xref[6, i] = xref[0, i] - (wheel_base / 2) * math.cos(xref[2, i])
+        #         xref[7, i] = xref[1, i] - (wheel_base / 2) * math.sin(xref[2, i])
+        #     else:
+        #         xref[0, i] = feasible_cx[ncourse - 1]
+        #         xref[1, i] = feasible_cy[ncourse - 1]
+        #         xref[2, i] = feasible_cyaw[ncourse - 1]
+        #         xref[3, i] = xref[0, i] + (wheel_base / 2) * math.cos(xref[2, i])
+        #         xref[4, i] = xref[1, i] + (wheel_base / 2) * math.sin(xref[2, i])
+        #         xref[6, i] = xref[0, i] - (wheel_base / 2) * math.cos(xref[2, i])
+        #         xref[7, i] = xref[1, i] - (wheel_base / 2) * math.sin(xref[2, i])
+        # return xref, ind
+
+
     
     def checkGoal(self, state, goal, tind, nind):
 
@@ -833,14 +864,13 @@ def main1():
 
     gbm_length = 1
     tg = TrajectoryGenerator()
-    cx, cy, cyaw = tg.makeEightShapeTrajectory()
+    # cx, cy, cyaw = tg.makeEightShapeTrajectory()
+    cx, cy, cyaw, curvature = tg.makeEightShapeTrajectoryWithCurvature()
+    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectories(cx, cy, cyaw, curvature, gbm_length)
+
     xc, yc, yawc = cx[0], cy[0], cyaw[0]
-    xf = xc + gbm_length * math.cos(yawc) / 2
-    yf = yc + gbm_length * math.sin(yawc) / 2
-    yawf = yawc
-    xr = xc - gbm_length * math.cos(yawc) / 2
-    yr = yc - gbm_length * math.sin(yawc) / 2
-    yawr = yawc
+    xf, yf, yawf = cx_f[0], cy_f[0], cyaw_f[0]
+    xr, yr, yawr = cx_r[0], cy_r[0], cyaw_r[0]
     initial_state = State(x=xc, y=yc, yaw=yawc)
     initial_state_f = State(x=xf, y=yf, yaw=yawf)
     initial_state_r = State(x=xr, y=yr, yaw=yawr)
@@ -850,7 +880,7 @@ def main1():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, initial_state_f, initial_state_r)
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r, initial_state, initial_state_f, initial_state_r)
 
 def main2():
 
