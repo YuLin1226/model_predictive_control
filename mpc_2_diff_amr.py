@@ -833,17 +833,17 @@ class TrajectoryGenerator:
         x, y, yaw = [], [], []
         curvature = []
         for i in range(n):
-            ptx = 0.8 * math.sin(2 * math.pi / 60 * i) * size
-            pty = math.sin(1 * math.pi / 60 * i) * size
-            dx = 0.8 * math.cos(2 * math.pi / 60 * i) * 2 * math.pi / 60
-            dy = math.cos(1 * math.pi / 60 * i) * 1 * math.pi / 60
+            ptx = 0.8 * math.sin(2 * math.pi / ((n - 1) / 2) * i) * size
+            pty = math.sin(1 * math.pi / ((n - 1) / 2) * i) * size
+            dx = 0.8 * math.cos(2 * math.pi / 60 * i) * 2 * math.pi / ((n - 1) / 2)
+            dy = math.cos(1 * math.pi / ((n - 1) / 2) * i) * 1 * math.pi / ((n - 1) / 2)
             ptyaw = math.atan2(dy, dx)
             x.append(ptx)
             y.append(pty)
             yaw.append(ptyaw)
 
-            ddx = 0.8 * math.sin(2 * math.pi / 60 * i) * 2 * math.pi / 60 * (-1) * 2 * math.pi / 60
-            ddy = math.cos(1 * math.pi / 60 * i) * 1 * math.pi / 60 * (-1) * 1 * math.pi / 60
+            ddx = 0.8 * math.sin(2 * math.pi / ((n - 1) / 2) * i) * 2 * math.pi / ((n - 1) / 2) * (-1) * 2 * math.pi / ((n - 1) / 2)
+            ddy = math.cos(1 * math.pi / ((n - 1) / 2) * i) * 1 * math.pi / ((n - 1) / 2) * (-1) * 1 * math.pi / ((n - 1) / 2)
             k = (dx * ddy - ddx * dy) / ( (dx**2 + dy**2)**(1.5) )
             curvature.append(k)
         return x ,y, yaw, curvature
