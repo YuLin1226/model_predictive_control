@@ -855,8 +855,8 @@ class TrajectoryGenerator:
         for x, y, yaw, k in zip(cx, cy, cyaw, curvature):
 
             r = 1 / k
-            yaw_f = yaw + math.atan(wheel_base / 2 / r)
-            yaw_r = yaw - math.atan(wheel_base / 2 / r)
+            yaw_f = yaw - math.atan(wheel_base / 2 / r)
+            yaw_r = yaw + math.atan(wheel_base / 2 / r)
             x_f = x + math.cos(yaw) * wheel_base / 2
             x_r = x - math.cos(yaw) * wheel_base / 2
             y_f = y + math.sin(yaw) * wheel_base / 2
@@ -868,6 +868,8 @@ class TrajectoryGenerator:
             cx_r.append(x_r)
             cy_r.append(y_r)
             cyaw_r.append(yaw_r)
+
+            # print(np.rad2deg(yaw_f), np.rad2deg(yaw), np.rad2deg(yaw_r))
 
         return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
 
