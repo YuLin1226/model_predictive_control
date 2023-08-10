@@ -227,17 +227,17 @@ class MPC:
         self.crab_rotation_speed_inc_rate_ = np.deg2rad(45)
         self.crab_traction_speed_inc_rate_ = 0.2
         self.crab_max_traction_speed_ = 0.5
-        self.crab_max_rotation_speed_ = np.deg2rad(45)
+        self.crab_max_rotation_speed_ = np.deg2rad(90)
 
         # Cost parameters
         self.R_  = np.diag([0.01, 0.01, 0.01, 0.01])
         self.Rd_ = np.diag([0.01, 0.01, 0.01, 0.01]) # Unused.
-        self.Q_  = np.diag([0.5, 0.5, 0.5, 
-                            0.1, 0.1, 0.1, 
-                            0.1, 0.1, 0.1])
-        self.Qf_ = np.diag([0.5, 0.5, 0.5, 
-                            0.1, 0.1, 0.1, 
-                            0.1, 0.1, 0.1])
+        self.Q_  = np.diag([0.5, 0.5, 0.0, 
+                            0.1, 0.1, 0.01, 
+                            0.1, 0.1, 0.01])
+        self.Qf_ = np.diag([0.5, 0.5, 0.0, 
+                            0.1, 0.1, 0.01, 
+                            0.1, 0.1, 0.01])
 
         # Car viz
         self.viz_ = CarViz()
@@ -264,7 +264,9 @@ class MPC:
         cyaw = smooth_yaw(cyaw)
 
         while max_time >= time:
-            x0 = [state.x, state.y, state.yaw, state_f.x, state_f.y, state_f.yaw, state_r.x, state_r.y, state_r.yaw,] 
+            x0 = [state.x, state.y, state.yaw, 
+                  state_f.x, state_f.y, state_f.yaw, 
+                  state_r.x, state_r.y, state_r.yaw] 
             xref, target_ind = self.getReferenceTrajectory(state, cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r, 2, target_ind)
             ovf, ovr, owf, owr, ox, oy, oyaw = self.iterativeLMPC(xref, x0, ovf, ovr, owf, owr, mode)
 
@@ -857,17 +859,19 @@ class TrajectoryGenerator:
             r = 1 / k
             yaw_f = yaw - math.atan(wheel_base / 2 / r)
             yaw_r = yaw + math.atan(wheel_base / 2 / r)
-            x_f = x + math.cos(yaw) * wheel_base / 2
-            x_r = x - math.cos(yaw) * wheel_base / 2
-            y_f = y + math.sin(yaw) * wheel_base / 2
-            y_r = y - math.sin(yaw) * wheel_base / 2
+            
+            x_f = x + math.cos(cyaw[0]) * wheel_base / 2
+            y_f = y + math.sin(cyaw[0]) * wheel_base / 2
+
+            x_r = x - math.cos(cyaw[0]) * wheel_base / 2
+            y_r = y - math.sin(cyaw[0]) * wheel_base / 2
 
             cx_f.append(x_f)
             cy_f.append(y_f)
-            cyaw_f.append(yaw_f)
+            cyaw_f.append(yaw)
             cx_r.append(x_r)
             cy_r.append(y_r)
-            cyaw_r.append(yaw_r)
+            cyaw_r.append(yaw)
 
             # print(np.rad2deg(yaw_f), np.rad2deg(yaw), np.rad2deg(yaw_r))
 
@@ -963,10 +967,42 @@ def main5():
     mpc = MPC()
     t, x, y, yaw, vx, w = mpc.doSimulationWithAllMotionModes(idx_group, cx, cy, cyaw, cmode, initial_state)
 
+def main6():
+    # test crab mode
+    print(__file__ + " start...")
+
+    gbm_length = 1
+    tg = TrajectoryGenerator()
+    # cx, cy, cyaw = tg.makeEightShapeTrajectory()
+    cx, cy, cyaw, curvature = tg.makeEightShapeTrajectoryWithCurvature(size=10, n=121)
+    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectories(cx, cy, cyaw, curvature, gbm_length)
+
+    # Change all cyaw to cyaw[0]
+    for i in range(len(cyaw)):
+        cyaw[i] = cyaw[0]
+
+    xc, yc, yawc = cx[0], cy[0], cyaw[0]
+    xf, yf, yawf = cx_f[0], cy_f[0], cyaw_f[0]
+    xr, yr, yawr = cx_r[0], cy_r[0], cyaw_r[0]
+    initial_state = State(x=xc, y=yc, yaw=yawc)
+    initial_state_f = State(x=xf, y=yf, yaw=yawf)
+    initial_state_r = State(x=xr, y=yr, yaw=yawr)
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    mpc = MPC()
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(
+        cx, cy, cyaw, 
+        cx_f, cy_f, cyaw_f, 
+        cx_r, cy_r, cyaw_r, 
+        initial_state, initial_state_f, initial_state_r, 'crab')
 
 if __name__ == '__main__':
-    main1() # 8 shaped / Ackermann Mode
+    # main1() # 8 shaped / Ackermann Mode
     # main2() # RRT / Ackermann Mode
     # main3() # RRT / Crab Mode
     # main4() # RRT / Diff Mode
     # main5()
+    main6()
