@@ -529,34 +529,45 @@ class MPC:
                 cost += cvxpy.quad_form(xref[:, t] - x[:, t], self.Q_)
 
             A, B, C = self.gbm_.getRobotModelMatrice(
-                theta=xbar[2, t],
-                v_f=uref[0, t],
-                v_r=uref[2, t],
-                delta_f=uref[1, t],
-                delta_r=uref[3, t])
+                x = xbar[0, t],
+                y = xbar[1, t],
+                theta = xbar[2, t],
+                x_f = xbar[3, t],
+                y_f = xbar[4, t],
+                theta_f = xbar[5, t],
+                x_r = xbar[6, t],
+                y_r = xbar[7, t],
+                theta_r = xbar[8, t],
+                v_f = uref[0, t],
+                v_r = uref[2, t],
+                w_f = uref[1, t],
+                w_r = uref[3, t]
+                )
         
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
             if t < (self.horizon_ - 1):
-                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.crab_speed_inc_rate_ * dt]
-                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.crab_speed_inc_rate_ * dt]
-                constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.crab_steer_inc_rate_ * dt]
-                constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= self.crab_steer_inc_rate_ * dt]
-
-            if t == 0:
-                constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= self.crab_steer_inc_rate_ * dt]
-                constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= self.crab_steer_inc_rate_ * dt]
-
-
+                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.crab_traction_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.crab_traction_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.crab_rotation_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[3, t+1] - u[1, t]) <= self.crab_rotation_speed_inc_rate_ * dt]
+    
         cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], self.Qf_)
 
-        constraints += [x[:, 0] == x0]
-        constraints += [cvxpy.abs(u[0, :]) <= self.crab_max_speed_]
-        constraints += [cvxpy.abs(u[2, :]) <= self.crab_max_speed_]
-        constraints += [cvxpy.abs(u[1, :]) <= self.crab_max_steer_]
-        constraints += [cvxpy.abs(u[3, :]) <= self.crab_max_steer_]
-        constraints += [u[1, :] == u[3, :]]
-        constraints += [u[0, :] == u[2, :]]
+        constraints += [x[0, 0] == x0[0]]
+        constraints += [x[1, 0] == x0[1]]
+        constraints += [x[2, 0] == x0[2]]
+        constraints += [x[3, 0] == x0[3]]
+        constraints += [x[4, 0] == x0[4]]
+        constraints += [x[5, 0] == x0[5]]
+        constraints += [x[6, 0] == x0[6]]
+        constraints += [x[7, 0] == x0[7]]
+        constraints += [x[8, 0] == x0[8]]
+        constraints += [cvxpy.abs(u[0, :]) <= self.crab_max_traction_speed_]
+        constraints += [cvxpy.abs(u[2, :]) <= self.crab_max_traction_speed_]
+        constraints += [cvxpy.abs(u[1, :]) <= self.crab_max_rotation_speed_]
+        constraints += [cvxpy.abs(u[3, :]) <= self.crab_max_rotation_speed_]
+        constraints += [x[5, :] == x[8, :]]
 
         prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
         prob.solve(solver=cvxpy.ECOS, verbose=False)
@@ -567,8 +578,8 @@ class MPC:
             oyaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
             ovf = np.array(u.value[0, :]).flatten()
             ovr = np.array(u.value[2, :]).flatten()
-            osf = np.array(u.value[1, :]).flatten()
-            osr = np.array(u.value[3, :]).flatten()
+            owf = np.array(u.value[1, :]).flatten()
+            owr = np.array(u.value[3, :]).flatten()
 
         else:
             print("Error: Cannot solve mpc..")
@@ -577,10 +588,10 @@ class MPC:
             oyaw = None
             ovf = None
             ovr = None
-            osf = None
-            osr = None
+            owf = None
+            owr = None
 
-        return ovf, ovr, osf, osr, ox, oy, oyaw
+        return ovf, ovr, owf, owr, ox, oy, oyaw
 
     def getNearestIndex(self, state, cx, cy, cyaw, pind, n_ind_search=10):
 
