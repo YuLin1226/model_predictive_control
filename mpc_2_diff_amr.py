@@ -215,25 +215,29 @@ class MPC:
         self.stop_speed_ = stop_speed
 
         # constraints setting - ackermann mode
-        self.ackermann_steer_inc_rate_ = np.deg2rad(90)
-        self.ackermann_speed_inc_rate_ = 0.2
-        self.ackermann_max_speed_ = 0.3
-        self.ackermann_max_steer_ = np.deg2rad(90)
+        self.ackermann_rotation_speed_inc_rate_ = np.deg2rad(90)
+        self.ackermann_traction_speed_inc_rate_ = 1.0
+        self.ackermann_max_traction_speed_ = 0.5
+        self.ackermann_max_rotation_speed_ = np.deg2rad(45)
         # constraints setting - differential mode
         self.differential_speed_inc_rate_ = 0.2
         self.differential_fixed_steer_ = np.deg2rad(90)
         self.differential_max_speed_ = 0.47
         # constraints setting - crab mode
-        self.crab_steer_inc_rate_ = np.deg2rad(45)
-        self.crab_speed_inc_rate_ = 0.2
-        self.crab_max_speed_ = 0.5
-        self.crab_max_steer_ = np.deg2rad(45)
+        self.crab_rotation_speed_inc_rate_ = np.deg2rad(45)
+        self.crab_traction_speed_inc_rate_ = 0.2
+        self.crab_max_traction_speed_ = 0.5
+        self.crab_max_rotation_speed_ = np.deg2rad(45)
 
         # Cost parameters
         self.R_  = np.diag([0.01, 0.01, 0.01, 0.01])
         self.Rd_ = np.diag([0.01, 0.01, 0.01, 0.01]) # Unused.
-        self.Q_  = np.diag([1.0, 1.0, 0.5, 0, 0, 0.0, 0, 0, 0.0])
-        self.Qf_ = np.diag([1.0, 1.0, 0.5, 0, 0, 0.0, 0, 0, 0.0])
+        self.Q_  = np.diag([0.5, 0.5, 0.5, 
+                            0.1, 0.1, 0.1, 
+                            0.1, 0.1, 0.1])
+        self.Qf_ = np.diag([0.5, 0.5, 0.5, 
+                            0.1, 0.1, 0.1, 
+                            0.1, 0.1, 0.1])
 
         # Car viz
         self.viz_ = CarViz()
