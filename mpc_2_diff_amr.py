@@ -7,9 +7,7 @@ import math
 import numpy as np
 import sys
 import pathlib
-import csv
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
-
 
 def smooth_yaw(yaw):
 
@@ -25,7 +23,6 @@ def smooth_yaw(yaw):
             dyaw = yaw[i + 1] - yaw[i]
 
     return yaw
-
 
 class State:
 
@@ -776,7 +773,15 @@ class TrajectoryGenerator:
         
         return x ,y, yaw, curvature
 
-    def getFrontAndRearTrajectoriesInCrabMotion(self, cx, cy, cyaw, curvature, wheel_base):
+class CrabMotionTrajectoryGenerator(TrajectoryGenerator):
+
+    def makeEightShapeTrajectory(self, wheel_base=1, size=10, n=121):
+
+        cx, cy, cyaw, curvature = self.makeEightShapeTrajectoryWithCurvature(size=size, n=n)
+        cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = self.getFrontAndRearTrajectories(cx=cx, cy=cy, cyaw=cyaw, curvature=curvature, wheel_base=wheel_base)
+        return cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+
+    def getFrontAndRearTrajectories(self, cx, cy, cyaw, curvature, wheel_base):
 
         cx_f, cy_f, cyaw_f = [], [], []
         cx_r, cy_r, cyaw_r = [], [], []
@@ -802,7 +807,15 @@ class TrajectoryGenerator:
 
         return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
 
-    def getFrontAndRearTrajectoriesInAckermannMotion(self, cx, cy, cyaw, curvature, wheel_base):
+class AckermannMotionTrajectoryGenerator(TrajectoryGenerator):
+
+    def makeEightShapeTrajectory(self, wheel_base=1, size=10, n=121):
+
+        cx, cy, cyaw, curvature = self.makeEightShapeTrajectoryWithCurvature(size=size, n=n)
+        cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = self.getFrontAndRearTrajectories(cx=cx, cy=cy, cyaw=cyaw, curvature=curvature, wheel_base=wheel_base)
+        return cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+
+    def getFrontAndRearTrajectories(self, cx, cy, cyaw, curvature, wheel_base):
 
         cx_f, cy_f, cyaw_f = [], [], []
         cx_r, cy_r, cyaw_r = [], [], []
@@ -828,7 +841,15 @@ class TrajectoryGenerator:
 
         return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
 
-    def getFrontAndRearTrajectoriesInDifferentialMotion(self, cx, cy, cyaw, curvature, wheel_base):
+class DifferentialMotionTrajectoryGenerator(TrajectoryGenerator):
+
+    def makeEightShapeTrajectory(self, wheel_base=1, size=10, n=121):
+
+        cx, cy, cyaw, curvature = self.makeEightShapeTrajectoryWithCurvature(size=size, n=n)
+        cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = self.getFrontAndRearTrajectories(cx=cx, cy=cy, cyaw=cyaw, curvature=curvature, wheel_base=wheel_base)
+        return cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+
+    def getFrontAndRearTrajectories(self, cx, cy, cyaw, curvature, wheel_base):
 
         cx_f, cy_f, cyaw_f = [], [], []
         cx_r, cy_r, cyaw_r = [], [], []
@@ -853,14 +874,14 @@ class TrajectoryGenerator:
             cyaw_r.append(yaw_r)
 
         return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+
 
 def main1():
     print(__file__ + " start... MRS move in crab mode.")
 
     gbm_length = 1
-    tg = TrajectoryGenerator()
-    cx, cy, cyaw, curvature = tg.makeEightShapeTrajectoryWithCurvature(size=10, n=121)
-    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectoriesInCrabMotion(cx, cy, cyaw, curvature, gbm_length)
+    tg = CrabMotionTrajectoryGenerator()
+    cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.makeEightShapeTrajectory(wheel_base=gbm_length)
 
     # Change all cyaw to cyaw[0]
     for i in range(len(cyaw)):
@@ -888,9 +909,8 @@ def main2():
     print(__file__ + " start... MRS move in ackermann mode.")
 
     gbm_length = 1
-    tg = TrajectoryGenerator()
-    cx, cy, cyaw, curvature = tg.makeEightShapeTrajectoryWithCurvature(size=10, n=121)
-    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectoriesInAckermannMotion(cx, cy, cyaw, curvature, gbm_length)
+    tg = AckermannMotionTrajectoryGenerator()
+    cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.makeEightShapeTrajectory(wheel_base=gbm_length)
 
     # Change all cyaw to cyaw[0]
     for i in range(len(cyaw)):
@@ -918,9 +938,8 @@ def main3():
     print(__file__ + " start... MRS move in differential mode.")
 
     gbm_length = 1
-    tg = TrajectoryGenerator()
-    cx, cy, cyaw, curvature = tg.makeEightShapeTrajectoryWithCurvature(size=10, n=121)
-    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectoriesInDifferentialMotion(cx, cy, cyaw, curvature, gbm_length)
+    tg = DifferentialMotionTrajectoryGenerator()
+    cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.makeEightShapeTrajectory(wheel_base=gbm_length)
 
     # Change all cyaw to cyaw[0]
     for i in range(len(cyaw)):
