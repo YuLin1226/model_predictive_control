@@ -754,60 +754,6 @@ class TrajectoryGenerator:
     def __init__(self) -> None:
         pass
 
-    def interpolateReference(self, node_lists, interpolate_num=5, mode='ackermann'):
-
-        pts_x, pts_y, pts_yaw = [], [], []
-        if mode == 'ackermann' or mode == 'diff':
-            for i in range(len(node_lists) - 1):
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                if w == 0:
-                    continue
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    icr = [-vy / w, vx / w]
-                    yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
-                    x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
-                    y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-            
-            return pts_x, pts_y, pts_yaw
-        
-        if mode == 'crab':
-            for i in range(len(node_lists) - 1):
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    yaw = from_node[2]
-                    x = from_node[0] + (to_node[0] - from_node[0]) / interpolate_num * i
-                    y = from_node[1] + (to_node[1] - from_node[1]) / interpolate_num * i
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-            
-            return pts_x, pts_y, pts_yaw
-  
-    def makeEightShapeTrajectory(self, size=10, n=121):
-        x, y, yaw = [], [], []
-        for i in range(n):
-            ptx = 0.8 * math.sin(2 * math.pi / 60 * i) * size
-            pty = math.sin(1 * math.pi / 60 * i) * size
-            dx = 0.8 * math.cos(2 * math.pi / 60 * i) * 2 * math.pi / 60
-            dy = math.cos(1 * math.pi / 60 * i) * 1 * math.pi / 60
-            ptyaw = math.atan2(dy, dx)
-            x.append(ptx)
-            y.append(pty)
-            yaw.append(ptyaw)
-        
-        return x ,y, yaw
-    
     def makeEightShapeTrajectoryWithCurvature(self, size=10, n=121):
         x, y, yaw = [], [], []
         curvature = []
