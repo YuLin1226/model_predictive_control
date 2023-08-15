@@ -776,7 +776,33 @@ class TrajectoryGenerator:
         
         return x ,y, yaw, curvature
 
-    def getFrontAndRearTrajectories(self, cx, cy, cyaw, curvature, wheel_base):
+    def getFrontAndRearTrajectoriesInCrabMotion(self, cx, cy, cyaw, curvature, wheel_base):
+
+        cx_f, cy_f, cyaw_f = [], [], []
+        cx_r, cy_r, cyaw_r = [], [], []
+
+        for x, y, yaw, k in zip(cx, cy, cyaw, curvature):
+
+            r = 1 / k
+            yaw_f = yaw 
+            yaw_r = yaw 
+            
+            x_f = x + math.cos(cyaw[0]) * wheel_base / 2
+            y_f = y + math.sin(cyaw[0]) * wheel_base / 2
+
+            x_r = x - math.cos(cyaw[0]) * wheel_base / 2
+            y_r = y - math.sin(cyaw[0]) * wheel_base / 2
+
+            cx_f.append(x_f)
+            cy_f.append(y_f)
+            cyaw_f.append(yaw_f)
+            cx_r.append(x_r)
+            cy_r.append(y_r)
+            cyaw_r.append(yaw_r)
+
+        return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+
+    def getFrontAndRearTrajectoriesInAckermannMotion(self, cx, cy, cyaw, curvature, wheel_base):
 
         cx_f, cy_f, cyaw_f = [], [], []
         cx_r, cy_r, cyaw_r = [], [], []
@@ -795,10 +821,36 @@ class TrajectoryGenerator:
 
             cx_f.append(x_f)
             cy_f.append(y_f)
-            cyaw_f.append(yaw)
+            cyaw_f.append(yaw_f)
             cx_r.append(x_r)
             cy_r.append(y_r)
-            cyaw_r.append(yaw)
+            cyaw_r.append(yaw_r)
+
+        return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+
+    def getFrontAndRearTrajectoriesInDifferentialMotion(self, cx, cy, cyaw, curvature, wheel_base):
+
+        cx_f, cy_f, cyaw_f = [], [], []
+        cx_r, cy_r, cyaw_r = [], [], []
+
+        for x, y, yaw, k in zip(cx, cy, cyaw, curvature):
+
+            r = 1 / k
+            yaw_f = yaw - math.atan(wheel_base / 2 / r)
+            yaw_r = yaw + math.atan(wheel_base / 2 / r)
+            
+            x_f = x + math.cos(cyaw[0]) * wheel_base / 2
+            y_f = y + math.sin(cyaw[0]) * wheel_base / 2
+
+            x_r = x - math.cos(cyaw[0]) * wheel_base / 2
+            y_r = y - math.sin(cyaw[0]) * wheel_base / 2
+
+            cx_f.append(x_f)
+            cy_f.append(y_f)
+            cyaw_f.append(yaw_f)
+            cx_r.append(x_r)
+            cy_r.append(y_r)
+            cyaw_r.append(yaw_r)
 
         return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
 
@@ -807,9 +859,8 @@ def main1():
 
     gbm_length = 1
     tg = TrajectoryGenerator()
-    # cx, cy, cyaw = tg.makeEightShapeTrajectory()
     cx, cy, cyaw, curvature = tg.makeEightShapeTrajectoryWithCurvature(size=10, n=121)
-    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectories(cx, cy, cyaw, curvature, gbm_length)
+    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectoriesInCrabMotion(cx, cy, cyaw, curvature, gbm_length)
 
     # Change all cyaw to cyaw[0]
     for i in range(len(cyaw)):
@@ -838,9 +889,8 @@ def main2():
 
     gbm_length = 1
     tg = TrajectoryGenerator()
-    # cx, cy, cyaw = tg.makeEightShapeTrajectory()
     cx, cy, cyaw, curvature = tg.makeEightShapeTrajectoryWithCurvature(size=10, n=121)
-    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectories(cx, cy, cyaw, curvature, gbm_length)
+    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectoriesInAckermannMotion(cx, cy, cyaw, curvature, gbm_length)
 
     # Change all cyaw to cyaw[0]
     for i in range(len(cyaw)):
@@ -869,9 +919,8 @@ def main3():
 
     gbm_length = 1
     tg = TrajectoryGenerator()
-    # cx, cy, cyaw = tg.makeEightShapeTrajectory()
     cx, cy, cyaw, curvature = tg.makeEightShapeTrajectoryWithCurvature(size=10, n=121)
-    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectories(cx, cy, cyaw, curvature, gbm_length)
+    cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.getFrontAndRearTrajectoriesInDifferentialMotion(cx, cy, cyaw, curvature, gbm_length)
 
     # Change all cyaw to cyaw[0]
     for i in range(len(cyaw)):
