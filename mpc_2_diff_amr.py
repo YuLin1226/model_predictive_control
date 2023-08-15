@@ -72,26 +72,34 @@ class CarViz:
 
         plt.plot(np.array(outline[0, :]).flatten(),
                 np.array(outline[1, :]).flatten(), truckcolor)
-        
+
     def vizOn(self):
         plt.show()
 
-    def plotTrajectory(self, cx, cy):
-        plt.plot(cx, cy, "k-")
+    def plotTrajectory(self, cx, cy, traj_format='k-', label='label'):
+        plt.plot(cx, cy, traj_format, label=label)
 
+    def plotState(self, state, state_type='center'):
+        if state_type == 'center':
+            self.plotMRS(state.x, state.y, state.yaw)
+        elif state_type == 'amr':
+            self.plotAMR(state.x, state.y, state.yaw)
 
-    def showAnimation(self, ox, oy, cx, cy, x, y, xref, target_ind, state):
+    def showAnimation(self, ox, oy, cx, cy, x, y, xf, yf, xr, yr, xref, target_ind, state, state_f, state_r):
 
         plt.cla()
-        # for stopping simulation with the esc key.
-        plt.gcf().canvas.mpl_connect('key_release_event', lambda event: [exit(0) if event.key == 'escape' else None])
         if ox is not None:
-            plt.plot(ox, oy, "xr", label="MPC")
-        plt.plot(cx, cy, "-r", label="course")
-        plt.plot(x, y, "ob", label="trajectory")
-        plt.plot(xref[0, :], xref[1, :], "xk", label="xref")
-        plt.plot(cx[target_ind], cy[target_ind], "xg", label="target")
-        self.plotCar(state.x, state.y, state.yaw)
+            self.plotTrajectory(ox, oy, 'xr', 'MPC')
+        self.plotTrajectory(cx, cy, 'r-', 'center_global_ref')
+        self.plotTrajectory(x, y, 'bo', 'center_passed')
+        self.plotTrajectory(xf, yf, 'go', 'front_passed')
+        self.plotTrajectory(xr, yr, 'yo', 'rear_passed')
+        self.plotTrajectory(xref[0, :], xref[1, :], 'xk', 'c_ref')
+        self.plotTrajectory(xref[3, :], xref[4, :], 'xk', 'f_ref')
+        self.plotTrajectory(xref[6, :], xref[7, :], 'xk', 'r_ref')
+        self.plotState(state, 'center')
+        self.plotState(state_f, 'amr')
+        self.plotState(state_r, 'amr')
         plt.axis("equal")
         plt.grid(True)
         plt.pause(0.0001)
@@ -233,9 +241,10 @@ class MPC:
         self.ackermann_max_traction_speed_ = 0.5
         self.ackermann_max_rotation_speed_ = np.deg2rad(45)
         # constraints setting - differential mode
-        self.differential_speed_inc_rate_ = 0.2
-        self.differential_fixed_steer_ = np.deg2rad(90)
-        self.differential_max_speed_ = 0.47
+        self.diff_rotation_speed_inc_rate_ = np.deg2rad(90)
+        self.diff_traction_speed_inc_rate_ = 0.6
+        self.diff_max_traction_speed_ = 0.3
+        self.diff_max_rotation_speed_ = np.deg2rad(90)
         # constraints setting - crab mode
         self.crab_rotation_speed_inc_rate_ = np.deg2rad(45)
         self.crab_traction_speed_inc_rate_ = 0.2
@@ -273,6 +282,14 @@ class MPC:
         vy = [state.vy]
         w = [state.w]
 
+        xf = [state_f.x]
+        yf = [state_f.y]
+        yawf = [state_f.yaw]
+
+        xr = [state_r.x]
+        yr = [state_r.y]
+        yawr = [state_r.yaw]
+
         t = [0.0]
         target_ind, _ = self.getNearestIndex(state, cx, cy, cyaw, 0)
         ovf, ovr, owf, owr = None, None, None, None
@@ -301,12 +318,20 @@ class MPC:
             w.append(state.w)
             t.append(time)
 
+            xf.append(state_f.x)
+            yf.append(state_f.y)
+            yawf.append(state_f.yaw)
+
+            xr.append(state_r.x)
+            yr.append(state_r.y)
+            yawr.append(state_r.yaw)
+
             if self.checkGoal(state, goal, target_ind, len(cx)):
                 print("Goal Reached.")
                 break
 
             if self.show_animation_:
-                self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind, state)
+                self.viz_.showAnimation(ox, oy, cx, cy, x, y, xf, yf, xr, yr, xref, target_ind, state, state_f, state_r)
 
         return t, x, y, yaw, vx, vy, w, state
 
@@ -327,6 +352,14 @@ class MPC:
         vy = [state.vy]
         w = [state.w]
 
+        xf = [state_f.x]
+        yf = [state_f.y]
+        yawf = [state_f.yaw]
+
+        xr = [state_r.x]
+        yr = [state_r.y]
+        yawr = [state_r.yaw]
+
         t = [0.0]
         target_ind, _ = self.getNearestIndex(state, cx, cy, cyaw, 0)
         ovf, ovr, owf, owr = None, None, None, None
@@ -355,12 +388,20 @@ class MPC:
             w.append(state.w)
             t.append(time)
 
+            xf.append(state_f.x)
+            yf.append(state_f.y)
+            yawf.append(state_f.yaw)
+
+            xr.append(state_r.x)
+            yr.append(state_r.y)
+            yawr.append(state_r.yaw)
+
             if self.checkGoal(state, goal, target_ind, len(cx)):
                 print("Goal Reached.")
                 break
 
             if self.show_animation_:
-                self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind, state)
+                self.viz_.showAnimation(ox, oy, cx, cy, x, y, xf, yf, xr, yr, xref, target_ind, state, state_f, state_r)
 
         return t, x, y, yaw, vx, vy, w, state
 
@@ -381,6 +422,14 @@ class MPC:
         vy = [state.vy]
         w = [state.w]
 
+        xf = [state_f.x]
+        yf = [state_f.y]
+        yawf = [state_f.yaw]
+
+        xr = [state_r.x]
+        yr = [state_r.y]
+        yawr = [state_r.yaw]
+
         t = [0.0]
         target_ind, _ = self.getNearestIndex(state, cx, cy, cyaw, 0)
         ovf, ovr, owf, owr = None, None, None, None
@@ -409,12 +458,20 @@ class MPC:
             w.append(state.w)
             t.append(time)
 
+            xf.append(state_f.x)
+            yf.append(state_f.y)
+            yawf.append(state_f.yaw)
+
+            xr.append(state_r.x)
+            yr.append(state_r.y)
+            yawr.append(state_r.yaw)
+
             if self.checkGoal(state, goal, target_ind, len(cx)):
                 print("Goal Reached.")
                 break
 
             if self.show_animation_:
-                self.viz_.showAnimation(ox, oy, cx, cy, x, y, xref, target_ind, state)
+                self.viz_.showAnimation(ox, oy, cx, cy, x, y, xf, yf, xr, yr, xref, target_ind, state, state_f, state_r)
 
         return t, x, y, yaw, vx, vy, w, state
 
