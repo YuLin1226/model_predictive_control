@@ -846,6 +846,9 @@ class DifferentialMotionTrajectoryGenerator(TrajectoryGenerator):
     def makeEightShapeTrajectory(self, wheel_base=1, size=10, n=121):
 
         cx, cy, cyaw, curvature = self.makeEightShapeTrajectoryWithCurvature(size=size, n=n)
+        # Modify cyaw to make orientation perpendicular to the path.
+        for yaw, i in enumerate(cyaw):
+            cyaw[i] = yaw + math.pi / 2
         cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = self.getFrontAndRearTrajectories(cx=cx, cy=cy, cyaw=cyaw, curvature=curvature, wheel_base=wheel_base)
         return cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
 
@@ -857,8 +860,8 @@ class DifferentialMotionTrajectoryGenerator(TrajectoryGenerator):
         for x, y, yaw, k in zip(cx, cy, cyaw, curvature):
 
             r = 1 / k
-            yaw_f = yaw - math.atan(wheel_base / 2 / r)
-            yaw_r = yaw + math.atan(wheel_base / 2 / r)
+            yaw_f = yaw + math.pi / 2
+            yaw_r = yaw + math.pi / 2
             
             x_f = x + math.cos(cyaw[0]) * wheel_base / 2
             y_f = y + math.sin(cyaw[0]) * wheel_base / 2
@@ -874,6 +877,9 @@ class DifferentialMotionTrajectoryGenerator(TrajectoryGenerator):
             cyaw_r.append(yaw_r)
 
         return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+
+
+# --------------------- Main Function Section --------------------- 
 
 
 def main1():
