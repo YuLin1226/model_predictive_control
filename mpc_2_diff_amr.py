@@ -106,7 +106,7 @@ class GeneralBicycleModel:
         wheel_base = math.sqrt((state_f.y - state_f.y)**2 + (state_f.x - state_r.x)**2)
         state.x = (state_f.x + state_r.x) / 2
         state.y = (state_f.y + state_r.y) / 2
-        state.yaw = math.atan2(state_f.y - state_f.y, state_f.x - state_r.x)
+        state.yaw = math.atan2(state_f.y - state_r.y, state_f.x - state_r.x)
         state.vx = (state_f.vx * math.cos(state_f.yaw) + state_r.vx * math.cos(state_r.yaw)) / 2
         state.vy = (state_f.vx * math.sin(state_f.yaw) + state_r.vx * math.sin(state_r.yaw)) / 2
         state.w = 1 / wheel_base * (state_f.vx * math.sin(state_f.yaw - state.yaw) + state_r.vx * math.sin(state_r.yaw - state.yaw))
