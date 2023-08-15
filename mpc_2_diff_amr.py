@@ -560,26 +560,46 @@ class MPC:
                 cost += cvxpy.quad_form(xref[:, t] - x[:, t], self.Q_)
 
             A, B, C = self.gbm_.getRobotModelMatrice(
-                theta=xbar[2, t],
-                v_f=uref[0, t],
-                v_r=uref[2, t],
-                delta_f=uref[1, t],
-                delta_r=uref[3, t])
+                x = xbar[0, t],
+                y = xbar[1, t],
+                theta = xbar[2, t],
+                x_f = xbar[3, t],
+                y_f = xbar[4, t],
+                theta_f = xbar[5, t],
+                x_r = xbar[6, t],
+                y_r = xbar[7, t],
+                theta_r = xbar[8, t],
+                v_f = uref[0, t],
+                v_r = uref[2, t],
+                w_f = uref[1, t],
+                w_r = uref[3, t]
+                )
         
             constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
             if t < (self.horizon_ - 1):
-                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.differential_speed_inc_rate_ * dt]
-                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.differential_speed_inc_rate_ * dt]
-
+                constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.diff_traction_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.diff_traction_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.diff_rotation_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= self.diff_rotation_speed_inc_rate_ * dt]
+    
         cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], self.Qf_)
 
-        constraints += [x[:, 0] == x0]
-        constraints += [cvxpy.abs(u[0, :]) <= self.differential_max_speed_]
-        constraints += [cvxpy.abs(u[2, :]) <= self.differential_max_speed_]
-        constraints += [u[1, :] == self.differential_fixed_steer_]
-        constraints += [u[3, :] == self.differential_fixed_steer_]
-        
+        constraints += [x[0, 0] == x0[0]]
+        constraints += [x[1, 0] == x0[1]]
+        constraints += [x[2, 0] == x0[2]]
+        constraints += [x[3, 0] == x0[3]]
+        constraints += [x[4, 0] == x0[4]]
+        constraints += [x[5, 0] == x0[5]]
+        constraints += [x[6, 0] == x0[6]]
+        constraints += [x[7, 0] == x0[7]]
+        constraints += [x[8, 0] == x0[8]]
+        constraints += [cvxpy.abs(u[0, :]) <= self.diff_max_traction_speed_]
+        constraints += [cvxpy.abs(u[2, :]) <= self.diff_max_traction_speed_]
+        constraints += [cvxpy.abs(u[1, :]) <= self.diff_max_rotation_speed_]
+        constraints += [cvxpy.abs(u[3, :]) <= self.diff_max_rotation_speed_]
+        constraints += [cvxpy.abs(x[5, :] - x[2, :] + math.pi / 2) <= np.deg2rad(30)]
+        constraints += [cvxpy.abs(x[8, :] - x[2, :] + math.pi / 2) <= np.deg2rad(30)]
 
         prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
         prob.solve(solver=cvxpy.ECOS, verbose=False)
@@ -590,8 +610,8 @@ class MPC:
             oyaw = np.array(x.value[2, :]).flatten() # this is only used in Plotting.
             ovf = np.array(u.value[0, :]).flatten()
             ovr = np.array(u.value[2, :]).flatten()
-            osf = np.array(u.value[1, :]).flatten()
-            osr = np.array(u.value[3, :]).flatten()
+            owf = np.array(u.value[1, :]).flatten()
+            owr = np.array(u.value[3, :]).flatten()
 
         else:
             print("Error: Cannot solve mpc..")
@@ -600,10 +620,10 @@ class MPC:
             oyaw = None
             ovf = None
             ovr = None
-            osf = None
-            osr = None
+            owf = None
+            owr = None
 
-        return ovf, ovr, osf, osr, ox, oy, oyaw
+        return ovf, ovr, owf, owr, ox, oy, oyaw
 
     def doLMPC_Crab(self, xref, xbar, x0, uref, dt=0.2):
 
@@ -641,7 +661,7 @@ class MPC:
                 constraints += [cvxpy.abs(u[0, t+1] - u[0, t]) <= self.crab_traction_speed_inc_rate_ * dt]
                 constraints += [cvxpy.abs(u[2, t+1] - u[2, t]) <= self.crab_traction_speed_inc_rate_ * dt]
                 constraints += [cvxpy.abs(u[1, t+1] - u[1, t]) <= self.crab_rotation_speed_inc_rate_ * dt]
-                constraints += [cvxpy.abs(u[3, t+1] - u[1, t]) <= self.crab_rotation_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= self.crab_rotation_speed_inc_rate_ * dt]
     
         cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], self.Qf_)
 
@@ -847,7 +867,7 @@ class DifferentialMotionTrajectoryGenerator(TrajectoryGenerator):
 
         cx, cy, cyaw, curvature = self.makeEightShapeTrajectoryWithCurvature(size=size, n=n)
         # Modify cyaw to make orientation perpendicular to the path.
-        for yaw, i in enumerate(cyaw):
+        for i, yaw in enumerate(cyaw):
             cyaw[i] = yaw + math.pi / 2
         cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = self.getFrontAndRearTrajectories(cx=cx, cy=cy, cyaw=cyaw, curvature=curvature, wheel_base=wheel_base)
         return cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
@@ -860,14 +880,14 @@ class DifferentialMotionTrajectoryGenerator(TrajectoryGenerator):
         for x, y, yaw, k in zip(cx, cy, cyaw, curvature):
 
             r = 1 / k
-            yaw_f = yaw + math.pi / 2
-            yaw_r = yaw + math.pi / 2
+            yaw_f = yaw - math.pi / 2
+            yaw_r = yaw - math.pi / 2
             
-            x_f = x + math.cos(cyaw[0]) * wheel_base / 2
-            y_f = y + math.sin(cyaw[0]) * wheel_base / 2
+            x_f = x + math.cos(yaw) * wheel_base / 2
+            y_f = y + math.sin(yaw) * wheel_base / 2
 
-            x_r = x - math.cos(cyaw[0]) * wheel_base / 2
-            y_r = y - math.sin(cyaw[0]) * wheel_base / 2
+            x_r = x - math.cos(yaw) * wheel_base / 2
+            y_r = y - math.sin(yaw) * wheel_base / 2
 
             cx_f.append(x_f)
             cy_f.append(y_f)
@@ -900,9 +920,9 @@ def main1():
     initial_state_f = State(x=xf, y=yf, yaw=yawf)
     initial_state_r = State(x=xr, y=yr, yaw=yawr)
 
-    cx.pop(0)
-    cy.pop(0)
-    cyaw.pop(0)
+    # cx.pop(0)
+    # cy.pop(0)
+    # cyaw.pop(0)
 
     mpc = MPC()
     t, x, y, yaw, vx, vy, w, state = mpc.doSimulationCrab(
@@ -929,9 +949,9 @@ def main2():
     initial_state_f = State(x=xf, y=yf, yaw=yawf)
     initial_state_r = State(x=xr, y=yr, yaw=yawr)
 
-    cx.pop(0)
-    cy.pop(0)
-    cyaw.pop(0)
+    # cx.pop(0)
+    # cy.pop(0)
+    # cyaw.pop(0)
 
     mpc = MPC()
     t, x, y, yaw, vx, vy, w, state = mpc.doSimulationAckermann(
@@ -945,11 +965,7 @@ def main3():
 
     gbm_length = 1
     tg = DifferentialMotionTrajectoryGenerator()
-    cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.makeEightShapeTrajectory(wheel_base=gbm_length)
-
-    # Change all cyaw to cyaw[0]
-    for i in range(len(cyaw)):
-        cyaw[i] = cyaw[0]
+    cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.makeEightShapeTrajectory(wheel_base=gbm_length, n=241)
 
     xc, yc, yawc = cx[0], cy[0], cyaw[0]
     xf, yf, yawf = cx_f[0], cy_f[0], cyaw_f[0]
@@ -958,10 +974,6 @@ def main3():
     initial_state_f = State(x=xf, y=yf, yaw=yawf)
     initial_state_r = State(x=xr, y=yr, yaw=yawr)
 
-    cx.pop(0)
-    cy.pop(0)
-    cyaw.pop(0)
-
     mpc = MPC()
     t, x, y, yaw, vx, vy, w, state = mpc.doSimulationDiff(
         cx, cy, cyaw, 
@@ -969,11 +981,10 @@ def main3():
         cx_r, cy_r, cyaw_r, 
         initial_state, initial_state_f, initial_state_r)
     
-
 if __name__ == '__main__':
     
-    main1() # Crab          Mode With 8-shaped Path.
+    # main1() # Crab          Mode With 8-shaped Path.
 
     # main2() # Ackermann     Mode With 8-shaped Path.
     
-    # main3() # Differential  Mode With 8-shaped Path.
+    main3() # Differential  Mode With 8-shaped Path.
