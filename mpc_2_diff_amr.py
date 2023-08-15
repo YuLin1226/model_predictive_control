@@ -41,10 +41,27 @@ class CarViz:
         self.length_ = car_size[0]
         self.width_ = car_size[1]
 
-    def plotCar(self, x, y, yaw, truckcolor="-k"): 
+    def plotMRS(self, x, y, yaw, truckcolor="-k"): 
     
         outline = np.array([[-self.length_/2, self.length_/2, self.length_/2, -self.length_/2, -self.length_/2],
                             [self.width_ / 2, self.width_ / 2, - self.width_ / 2, -self.width_ / 2, self.width_ / 2]])
+
+        Rot1 = np.array([[math.cos(yaw), math.sin(yaw)],
+                        [-math.sin(yaw), math.cos(yaw)]])
+
+        outline = (outline.T.dot(Rot1)).T
+        outline[0, :] += x
+        outline[1, :] += y
+
+        plt.plot(np.array(outline[0, :]).flatten(),
+                np.array(outline[1, :]).flatten(), truckcolor)
+        
+    def plotAMR(self, x, y, yaw, truckcolor="-k"): 
+    
+        length = 0.5
+
+        outline = np.array([[-length/2, -length/2, +length/2, length/1.2,  +length/2, -length/2],
+                            [-length/2, +length/2, +length/2, 0,           -length/2, -length/2]])
 
         Rot1 = np.array([[math.cos(yaw), math.sin(yaw)],
                         [-math.sin(yaw), math.cos(yaw)]])
