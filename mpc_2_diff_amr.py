@@ -24,6 +24,15 @@ def smooth_yaw(yaw):
 
     return yaw
 
+def solveAtan2Continuity(cyaw):
+
+    for i, yaw in enumerate(cyaw):
+        if yaw < 0:
+            cyaw[i] = yaw + 2 * math.pi
+
+    return cyaw
+
+
 class State:
 
     def __init__(self, x=0.0, y=0.0, yaw=0.0, vx=0.0, vy=0.0, w=0.0):
@@ -293,7 +302,6 @@ class MPC:
         t = [0.0]
         target_ind, _ = self.getNearestIndex(state, cx, cy, cyaw, 0)
         ovf, ovr, owf, owr = None, None, None, None
-        cyaw = smooth_yaw(cyaw)
 
         while max_time >= time:
             x0 = [state.x, state.y, state.yaw, 
@@ -982,6 +990,10 @@ def main1():
     gbm_length = 1
     tg = CrabMotionTrajectoryGenerator()
     cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.makeEightShapeTrajectory(wheel_base=gbm_length)
+
+    cyaw = solveAtan2Continuity(cyaw)
+    cyaw_f = solveAtan2Continuity(cyaw_f)
+    cyaw_r = solveAtan2Continuity(cyaw_r)
 
     # Change all cyaw to cyaw[0]
     for i in range(len(cyaw)):
