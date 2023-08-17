@@ -252,8 +252,8 @@ class MPC:
         # constraints setting - differential mode
         self.diff_rotation_speed_inc_rate_ = np.deg2rad(90)
         self.diff_traction_speed_inc_rate_ = 0.6
-        self.diff_max_traction_speed_ = 0.3
-        self.diff_max_rotation_speed_ = np.deg2rad(90)
+        self.diff_max_traction_speed_ = 0.5
+        self.diff_max_rotation_speed_ = np.deg2rad(45)
         # constraints setting - crab mode
         self.crab_rotation_speed_inc_rate_ = np.deg2rad(45)
         self.crab_traction_speed_inc_rate_ = 0.2
@@ -263,12 +263,12 @@ class MPC:
         # Cost parameters
         self.R_  = np.diag([0.01, 0.01, 0.01, 0.01])
         self.Rd_ = np.diag([0.01, 0.01, 0.01, 0.01]) # Unused.
-        self.Q_  = np.diag([0.5, 0.5, 0.0, 
-                            0.1, 0.1, 0.01, 
-                            0.1, 0.1, 0.01])
-        self.Qf_ = np.diag([0.5, 0.5, 0.0, 
-                            0.1, 0.1, 0.01, 
-                            0.1, 0.1, 0.01])
+        self.Q_  = np.diag([0.0, 0.0, 0.0, 
+                            0.5, 0.5, 0.1, 
+                            0.5, 0.5, 0.1])
+        self.Qf_ = np.diag([0.0, 0.0, 0.0, 
+                            0.1, 0.1, 0.1, 
+                            0.1, 0.1, 0.1])
 
         # Car viz
         self.viz_ = CarViz()
@@ -481,7 +481,8 @@ class MPC:
             if self.show_animation_:
                 self.viz_.showAnimation(ox, oy, cx, cy, x, y, xf, yf, xr, yr, xref, target_ind, state, state_f, state_r)
 
-        return t, x, y, yaw, vx, vy, w, state
+        # return t, x, y, yaw, vx, vy, w, state
+        return t, x, y, yaw, xf, yf, yawf, xr, yr, yawr
 
     def predictMotion(self, x0, vf, vr, wf, wr, xref):
         """
@@ -680,8 +681,8 @@ class MPC:
         constraints += [cvxpy.abs(u[2, :]) <= self.diff_max_traction_speed_]
         constraints += [cvxpy.abs(u[1, :]) <= self.diff_max_rotation_speed_]
         constraints += [cvxpy.abs(u[3, :]) <= self.diff_max_rotation_speed_]
-        constraints += [cvxpy.abs(x[5, :] - x[2, :] + math.pi / 2) <= np.deg2rad(30)]
-        constraints += [cvxpy.abs(x[8, :] - x[2, :] + math.pi / 2) <= np.deg2rad(30)]
+        # constraints += [cvxpy.abs(x[5, :] - x[2, :] + math.pi / 2) <= np.deg2rad(30)]
+        # constraints += [cvxpy.abs(x[8, :] - x[2, :] + math.pi / 2) <= np.deg2rad(30)]
 
         prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
         prob.solve(solver=cvxpy.ECOS, verbose=False)
@@ -1051,7 +1052,11 @@ def main3():
 
     gbm_length = 1
     tg = DifferentialMotionTrajectoryGenerator()
-    cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.makeEightShapeTrajectory(wheel_base=gbm_length, n=241)
+    cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.makeEightShapeTrajectory(wheel_base=gbm_length, n=481)
+
+    cyaw = solveAtan2Continuity(cyaw)
+    cyaw_f = solveAtan2Continuity(cyaw_f)
+    cyaw_r = solveAtan2Continuity(cyaw_r)
 
     xc, yc, yawc = cx[0], cy[0], cyaw[0]
     xf, yf, yawf = cx_f[0], cy_f[0], cyaw_f[0]
@@ -1061,11 +1066,27 @@ def main3():
     initial_state_r = State(x=xr, y=yr, yaw=yawr)
 
     mpc = MPC()
-    t, x, y, yaw, vx, vy, w, state = mpc.doSimulationDiff(
+
+    t, xc, yc, yawc, xf, yf, yawf, xr, yr, yawr = mpc.doSimulationDiff(
         cx, cy, cyaw, 
         cx_f, cy_f, cyaw_f, 
         cx_r, cy_r, cyaw_r, 
         initial_state, initial_state_f, initial_state_r)
+    
+    dist = []
+    dyawf = []
+    dyawr = []
+    for i in range(len(t)):
+        dist.append(math.sqrt((xf[i] - xr[i])**2 + (yf[i] - yr[i])**2))
+        dyawf.append(np.rad2deg(abs(yawf[i] - yawc[i])))
+        dyawr.append(np.rad2deg(abs(yawr[i] - yawc[i])))
+    
+    plt.figure(2)
+    plt.plot(t, dist, 'r-')
+    plt.figure(3)
+    plt.plot(t, dyawf, 'g-')
+    plt.plot(t, dyawr, 'b-')
+    plt.show()
     
 if __name__ == '__main__':
     
