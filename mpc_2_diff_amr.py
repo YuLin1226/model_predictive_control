@@ -582,11 +582,12 @@ class MPC:
                 constraints += [cvxpy.abs(u[3, t+1] - u[3, t]) <= self.ackermann_rotation_speed_inc_rate_ * dt]
 
             if t == 0:
+                constraints += [cvxpy.abs(uref[0, t] - u[0, t]) <= self.ackermann_traction_speed_inc_rate_ * dt]
+                constraints += [cvxpy.abs(uref[2, t] - u[2, t]) <= self.ackermann_traction_speed_inc_rate_ * dt]
                 constraints += [cvxpy.abs(uref[1, t] - u[1, t]) <= self.ackermann_rotation_speed_inc_rate_ * dt]
                 constraints += [cvxpy.abs(uref[3, t] - u[3, t]) <= self.ackermann_rotation_speed_inc_rate_ * dt]
     
         cost += cvxpy.quad_form(xref[:, self.horizon_] - x[:, self.horizon_], self.Qf_)
-
 
         constraints += [x[0, 0] == x0[0]]
         constraints += [x[1, 0] == x0[1]]
@@ -601,11 +602,8 @@ class MPC:
         constraints += [cvxpy.abs(u[2, :]) <= self.ackermann_max_traction_speed_]
         constraints += [cvxpy.abs(u[1, :]) <= self.ackermann_max_rotation_speed_]
         constraints += [cvxpy.abs(u[3, :]) <= self.ackermann_max_rotation_speed_]
-        # constraints += [x[5, :] - x[2, :] == x[8, :] - x[2, :]]
-
-        # I think w should be with different sign.
-        # constraints += [u[1, :] == -u[3, :]]
-        # constraints += [u[0, :] == u[2, :]]
+        constraints += [(x[5, :] - x[2, :]) - (x[2, :] - x[8, :]) <= np.deg2rad(10)]
+        constraints += [u[0, :] == u[2, :]]
 
         prob = cvxpy.Problem(cvxpy.Minimize(cost), constraints)
         prob.solve(solver=cvxpy.ECOS, verbose=False)
