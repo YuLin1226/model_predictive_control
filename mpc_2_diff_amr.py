@@ -413,7 +413,8 @@ class MPC:
             if self.show_animation_:
                 self.viz_.showAnimation(ox, oy, cx, cy, x, y, xf, yf, xr, yr, xref, target_ind, state, state_f, state_r)
 
-        return t, x, y, yaw, vx, vy, w, state
+        # return t, x, y, yaw, vx, vy, w, state
+        return t, x, y, yaw, xf, yf, yawf, xr, yr, yawr
 
     def doSimulationDiff(self, cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r, 
                      initial_state:State, initial_state_f:State, initial_state_r:State, 
@@ -1064,16 +1065,39 @@ def main2():
     initial_state_f = State(x=xf, y=yf, yaw=yawf)
     initial_state_r = State(x=xr, y=yr, yaw=yawr)
 
-    # cx.pop(0)
-    # cy.pop(0)
-    # cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, vy, w, state = mpc.doSimulationAckermann(
+
+    # Cost parameters
+    mpc.R_  = np.diag([0.01, 0.01, 0.01, 0.01])
+    mpc.Rd_ = np.diag([0.01, 0.01, 0.01, 0.01]) # Unused.
+    mpc.Q_  = np.diag([0.5, 0.5, 0.0, 
+                        0.1, 0.1, 0.01, 
+                        0.1, 0.1, 0.01])
+    mpc.Qf_ = np.diag([0.5, 0.5, 0.0, 
+                        0.1, 0.1, 0.01, 
+                        0.1, 0.1, 0.01])
+
+    t, xc, yc, yawc, xf, yf, yawf, xr, yr, yawr = mpc.doSimulationAckermann(
         cx, cy, cyaw, 
         cx_f, cy_f, cyaw_f, 
         cx_r, cy_r, cyaw_r, 
         initial_state, initial_state_f, initial_state_r)
+    
+    dist = []
+    dyawf = []
+    dyawr = []
+    for i in range(len(t)):
+        dist.append(math.sqrt((xf[i] - xr[i])**2 + (yf[i] - yr[i])**2))
+        dyawf.append(np.rad2deg(abs(yawf[i] - yawc[i])))
+        dyawr.append(np.rad2deg(abs(yawr[i] - yawc[i])))
+    
+    plt.figure(2)
+    plt.plot(t, dist, 'r-')
+    plt.figure(3)
+    plt.plot(t, dyawf, 'g-')
+    plt.plot(t, dyawr, 'b-')
+    plt.show()
 
 def main3():
     print(__file__ + " start... MRS move in differential mode.")
