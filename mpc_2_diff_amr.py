@@ -915,35 +915,60 @@ class AckermannMotionTrajectoryGenerator(TrajectoryGenerator):
 
     def makeEightShapeTrajectory(self, wheel_base=1, size=10, n=121):
 
-        cx, cy, cyaw, curvature = self.makeEightShapeTrajectoryWithCurvature(size=size, n=n)
-        cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = self.getFrontAndRearTrajectories(cx=cx, cy=cy, cyaw=cyaw, curvature=curvature, wheel_base=wheel_base)
-        return cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
-
-    def getFrontAndRearTrajectories(self, cx, cy, cyaw, curvature, wheel_base):
-
+        cx, cy, cyaw = [], [], []
         cx_f, cy_f, cyaw_f = [], [], []
         cx_r, cy_r, cyaw_r = [], [], []
+        
+        L = wheel_base / 2
 
-        for x, y, yaw, k in zip(cx, cy, cyaw, curvature):
-
-            r = 1 / k
-            yaw_f = yaw - math.atan(wheel_base / 2 / r)
-            yaw_r = yaw + math.atan(wheel_base / 2 / r)
+        for i in range(n):
+            t = i / ((n - 1) / 2)
             
-            x_f = x + math.cos(cyaw[0]) * wheel_base / 2
-            y_f = y + math.sin(cyaw[0]) * wheel_base / 2
+            ptx = 0.8 * math.sin(2 * math.pi * t) * size
+            pty = math.sin(1 * math.pi * t) * size
 
-            x_r = x - math.cos(cyaw[0]) * wheel_base / 2
-            y_r = y - math.sin(cyaw[0]) * wheel_base / 2
+            dx = 0.8 * math.cos(2 * math.pi * t) * (2 * math.pi) * size
+            dy = math.cos(1 * math.pi * t) * (1 * math.pi) * size
+            ptyaw = math.atan2(dy, dx)
 
-            cx_f.append(x_f)
-            cy_f.append(y_f)
-            cyaw_f.append(yaw_f)
-            cx_r.append(x_r)
-            cy_r.append(y_r)
-            cyaw_r.append(yaw_r)
+            ddx = 0.8 * math.sin(2 * math.pi * t) * (-1) * (2 * math.pi) * (2 * math.pi) * size
+            ddy = math.cos(1 * math.pi * t) * (-1) * (1 * math.pi) * (1 * math.pi) * size
 
-        return cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+            cx.append(ptx)
+            cy.append(pty)
+            cyaw.append(ptyaw)
+
+            squre_sum_of_dx_and_dy = dx**2 + dy**2
+
+            ptxf = ptx + L * dx / math.sqrt(squre_sum_of_dx_and_dy)
+            ptyf = pty + L * dy / math.sqrt(squre_sum_of_dx_and_dy)
+            
+            dxf = dx + L / squre_sum_of_dx_and_dy * ( ddx * math.sqrt(squre_sum_of_dx_and_dy) - dx / (2 * math.sqrt(squre_sum_of_dx_and_dy)) * (2*dx*ddx + 2*dy*ddy) )
+            dyf = dy + L / squre_sum_of_dx_and_dy * ( ddy * math.sqrt(squre_sum_of_dx_and_dy) - dy / (2 * math.sqrt(squre_sum_of_dx_and_dy)) * (2*dx*ddx + 2*dy*ddy) )
+
+            ptyawf = math.atan2(dyf, dxf)
+            
+            cx_f.append(ptxf)
+            cy_f.append(ptyf)
+            cyaw_f.append(ptyawf)
+
+            ptxr = ptx - L * dx / math.sqrt(squre_sum_of_dx_and_dy)
+            ptyr = pty - L * dy / math.sqrt(squre_sum_of_dx_and_dy)
+            
+            dxr = dx - L / squre_sum_of_dx_and_dy * ( ddx * math.sqrt(squre_sum_of_dx_and_dy) - dx / (2 * math.sqrt(squre_sum_of_dx_and_dy)) * (2*dx*ddx + 2*dy*ddy) )
+            dyr = dy - L / squre_sum_of_dx_and_dy * ( ddy * math.sqrt(squre_sum_of_dx_and_dy) - dy / (2 * math.sqrt(squre_sum_of_dx_and_dy)) * (2*dx*ddx + 2*dy*ddy) )
+
+            ptyawr = math.atan2(dyr, dxr)
+            
+            cx_r.append(ptxr)
+            cy_r.append(ptyr)
+            cyaw_r.append(ptyawr)
+
+        
+        return cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r
+
+        
+
 
 class DifferentialMotionTrajectoryGenerator(TrajectoryGenerator):
 
