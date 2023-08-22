@@ -26,9 +26,9 @@ class RobotPoseAnalyst:
         
     def doAnalysis(self):
 
-        self.getPredictedPose()
+        # self.getPredictedPose()
         self.getRobotPose()
-        self.getPlannerPose()
+        # self.getPlannerPose()
         self.plotPoses()
         self.vizOn()
 
