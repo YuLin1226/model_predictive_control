@@ -34,6 +34,14 @@ def smoothYaw(yaw):
             dyaw = yaw[i + 1] - yaw[i]
     return yaw
 
+def solveAtan2Continuity(cyaw):
+
+    for i, yaw in enumerate(cyaw):
+        if yaw < 0:
+            cyaw[i] = yaw + 2 * math.pi
+
+    return cyaw
+
 # ================================== Main ==================================
 def main():
 
@@ -45,7 +53,9 @@ def main():
     tg = TrajectoryGenerator()
     csv_writer = Writer()
 
-    cx, cy, cyaw = tg.makeEightShapeTrajectory(size=10, n=121)
+    cx, cy, cyaw = tg.makeEightShapeTrajectory(size=10, n=241)
+    cyaw = solveAtan2Continuity(cyaw)
+
     goal = [cx[-1], cy[-1]]
     state = rps.getState()
     target_ind, _ = mpc.getNearestIndex(state, cx, cy, cyaw, 0)
