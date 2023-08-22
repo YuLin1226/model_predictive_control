@@ -136,14 +136,18 @@ class TrajectoryGenerator:
         return trajectories_idx_group
 
     def makeEightShapeTrajectory(self, size=10, n=121):
+        
         x, y, yaw = [], [], []
         for i in range(n):
-            ptx = 0.8 * math.sin(2 * math.pi / 60 * i) * size
-            pty = math.sin(1 * math.pi / 60 * i) * size
-            dx = 0.8 * math.cos(2 * math.pi / 60 * i) * 2 * math.pi / 60
-            dy = math.cos(1 * math.pi / 60 * i) * 1 * math.pi / 60
+            t = i / ((n - 1) / 2)
+            ptx = 0.8 * math.sin(2 * math.pi * t) * size
+            pty = math.sin(1 * math.pi * t) * size
+
+            dx = 0.8 * math.cos(2 * math.pi * t) * (2 * math.pi) * size
+            dy = math.cos(1 * math.pi * t) * (1 * math.pi) * size
             ptyaw = math.atan2(dy, dx)
             x.append(ptx)
             y.append(pty)
             yaw.append(ptyaw)
+        
         return x ,y, yaw
