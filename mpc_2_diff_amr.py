@@ -1077,9 +1077,9 @@ def main2():
     tg = AckermannMotionTrajectoryGenerator()
     cx, cy, cyaw, cx_f, cy_f, cyaw_f, cx_r, cy_r, cyaw_r = tg.makeEightShapeTrajectory(wheel_base=gbm_length)
 
-    # Change all cyaw to cyaw[0]
-    for i in range(len(cyaw)):
-        cyaw[i] = cyaw[0]
+    cyaw = solveAtan2Continuity(cyaw)
+    cyaw_f = solveAtan2Continuity(cyaw_f)
+    cyaw_r = solveAtan2Continuity(cyaw_r)
 
     xc, yc, yawc = cx[0], cy[0], cyaw[0]
     xf, yf, yawf = cx_f[0], cy_f[0], cyaw_f[0]
