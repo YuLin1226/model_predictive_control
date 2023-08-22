@@ -9,6 +9,7 @@ from ros_pub_and_sub import CommandPublisher, RobotPoseSubscriber
 from mpc_lib import MPC
 from viz import CarViz
 from trajectory_gen import TrajectoryGenerator
+from state import State
 
 # ================================== Class ==================================
 class Writer:
@@ -87,6 +88,69 @@ def main():
     csv_writer.saveTrajectoryAsCSV(rps.nodes_)
     rospy.spin()
 
+def main2():
+
+    print(__file__ + " start...")
+
+    tg = TrajectoryGenerator()
+    ref = tg.retriveTrajectoryFromCSV('reference.csv')
+    cx, cy, cyaw = tg.interpolateReference(ref, 3)
+    cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    mpc = MPC()
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'ackermann')
+
+def main3():
+
+    print(__file__ + " start...")
+
+    tg = TrajectoryGenerator()
+    ref = tg.retriveTrajectoryFromCSV('reference_crab.csv')
+    cx, cy, cyaw = tg.interpolateReference(ref, 3, 'crab')
+    cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    mpc = MPC()
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'crab')
+
+def main4():
+
+    print(__file__ + " start...")
+
+    tg = TrajectoryGenerator()
+    ref = tg.retriveTrajectoryFromCSV('reference_diff.csv')
+    cx, cy, cyaw = tg.interpolateReference(ref, 2, 'diff')
+    cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+
+    mpc = MPC()
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'diff')
+
+def main5():
+
+    print(__file__ + " start...")
+
+    tg = TrajectoryGenerator()
+    ref = tg.retriveTrajectoryFromCSV('output.csv')
+    cx, cy, cyaw, cmode = tg.interpolateReference2(ref, 3)
+    idx_group = tg.splitTrajectoryWithMotionModes(cmode)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    mpc = MPC()
+    t, x, y, yaw, vx, w = mpc.doSimulationWithAllMotionModes(idx_group, cx, cy, cyaw, cmode, initial_state)
 
 # ================================== Run Code ==================================
 if __name__ == '__main__' :
