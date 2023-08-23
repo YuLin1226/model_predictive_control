@@ -89,55 +89,145 @@ def main():
     rospy.spin()
 
 def main2():
-
-    print(__file__ + " start...")
-
+    
+    rospy.init_node("mpc_planner_node", anonymous=True)
+    cp = CommandPublisher(topic_name="/dual_wheel_steering_controller/cmd_vel")
+    rps = RobotPoseSubscriber(topic_name="/gazebo/model_states")
+    viz = CarViz()
+    mpc = MPC()
     tg = TrajectoryGenerator()
+    csv_writer = Writer()
+
     ref = tg.retriveTrajectoryFromCSV('reference.csv')
     cx, cy, cyaw = tg.interpolateReference(ref, 3)
     cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
-    cx.pop(0)
-    cy.pop(0)
-    cyaw.pop(0)
+    cyaw = solveAtan2Continuity(cyaw)
 
-    mpc = MPC()
-    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'ackermann')
+    goal = [cx[-1], cy[-1]]
+    state = rps.getState()
+    target_ind, _ = mpc.getNearestIndex(state, cx, cy, cyaw, 0)
+    ovf, ovr, osf, osr = None, None, None, None
+    mode = 'ackermann'
+
+    while not rospy.is_shutdown():
+            
+        x0 = [state.x, state.y, state.yaw] 
+        xref, target_ind = mpc.getReferenceTrajectory(state, cx, cy, cyaw, 2, target_ind)
+        ovf, ovr, osf, osr, ox, oy, oyaw = mpc.iterativeLMPC(xref, x0, ovf, ovr, osf, osr, mode)
+
+        if ovf is not None:
+            vfi, vri, sfi, sri = ovf[0], ovr[0], osf[0], osr[0]
+            vxi, vyi, wi = mpc.gbm_.transformWheelCommandToRobotCommand(vfi, vri, sfi, sri)
+            
+        cmd = cp.prepareRobotCommand(vxi, vyi, wi)
+        cp.publishCommand(cmd)
+
+        if mpc.checkGoal(state, goal, target_ind, len(cx)):
+            print("Goal Reached.")
+            break
+        
+        state = rps.getState()
+        rps.nodes_.append(rps.node_)
+
+        viz.showAnimation(ox, oy, cx, cy, state.x, state.y, xref, target_ind, state)
+
+    csv_writer.saveTrajectoryAsCSV(rps.nodes_)
+    rospy.spin()
 
 def main3():
 
-    print(__file__ + " start...")
-
+    rospy.init_node("mpc_planner_node", anonymous=True)
+    cp = CommandPublisher(topic_name="/dual_wheel_steering_controller/cmd_vel")
+    rps = RobotPoseSubscriber(topic_name="/gazebo/model_states")
+    viz = CarViz()
+    mpc = MPC()
     tg = TrajectoryGenerator()
+    csv_writer = Writer()
+
     ref = tg.retriveTrajectoryFromCSV('reference_crab.csv')
     cx, cy, cyaw = tg.interpolateReference(ref, 3, 'crab')
     cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+    
+    cyaw = solveAtan2Continuity(cyaw)
 
-    cx.pop(0)
-    cy.pop(0)
-    cyaw.pop(0)
+    goal = [cx[-1], cy[-1]]
+    state = rps.getState()
+    target_ind, _ = mpc.getNearestIndex(state, cx, cy, cyaw, 0)
+    ovf, ovr, osf, osr = None, None, None, None
+    mode = 'crab'
 
-    mpc = MPC()
-    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'crab')
+    while not rospy.is_shutdown():
+            
+        x0 = [state.x, state.y, state.yaw] 
+        xref, target_ind = mpc.getReferenceTrajectory(state, cx, cy, cyaw, 2, target_ind)
+        ovf, ovr, osf, osr, ox, oy, oyaw = mpc.iterativeLMPC(xref, x0, ovf, ovr, osf, osr, mode)
+
+        if ovf is not None:
+            vfi, vri, sfi, sri = ovf[0], ovr[0], osf[0], osr[0]
+            vxi, vyi, wi = mpc.gbm_.transformWheelCommandToRobotCommand(vfi, vri, sfi, sri)
+            
+        cmd = cp.prepareRobotCommand(vxi, vyi, wi)
+        cp.publishCommand(cmd)
+
+        if mpc.checkGoal(state, goal, target_ind, len(cx)):
+            print("Goal Reached.")
+            break
+        
+        state = rps.getState()
+        rps.nodes_.append(rps.node_)
+
+        viz.showAnimation(ox, oy, cx, cy, state.x, state.y, xref, target_ind, state)
+
+    csv_writer.saveTrajectoryAsCSV(rps.nodes_)
+    rospy.spin()
 
 def main4():
 
-    print(__file__ + " start...")
-
+    rospy.init_node("mpc_planner_node", anonymous=True)
+    cp = CommandPublisher(topic_name="/dual_wheel_steering_controller/cmd_vel")
+    rps = RobotPoseSubscriber(topic_name="/gazebo/model_states")
+    viz = CarViz()
+    mpc = MPC()
     tg = TrajectoryGenerator()
+    csv_writer = Writer()
+
     ref = tg.retriveTrajectoryFromCSV('reference_diff.csv')
     cx, cy, cyaw = tg.interpolateReference(ref, 2, 'diff')
     cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+    
+    cyaw = solveAtan2Continuity(cyaw)
 
-    cx.pop(0)
-    cy.pop(0)
-    cyaw.pop(0)
+    goal = [cx[-1], cy[-1]]
+    state = rps.getState()
+    target_ind, _ = mpc.getNearestIndex(state, cx, cy, cyaw, 0)
+    ovf, ovr, osf, osr = None, None, None, None
+    mode = 'diff'
 
-    mpc = MPC()
-    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'diff')
+    while not rospy.is_shutdown():
+            
+        x0 = [state.x, state.y, state.yaw] 
+        xref, target_ind = mpc.getReferenceTrajectory(state, cx, cy, cyaw, 2, target_ind)
+        ovf, ovr, osf, osr, ox, oy, oyaw = mpc.iterativeLMPC(xref, x0, ovf, ovr, osf, osr, mode)
+
+        if ovf is not None:
+            vfi, vri, sfi, sri = ovf[0], ovr[0], osf[0], osr[0]
+            vxi, vyi, wi = mpc.gbm_.transformWheelCommandToRobotCommand(vfi, vri, sfi, sri)
+            
+        cmd = cp.prepareRobotCommand(vxi, vyi, wi)
+        cp.publishCommand(cmd)
+
+        if mpc.checkGoal(state, goal, target_ind, len(cx)):
+            print("Goal Reached.")
+            break
+        
+        state = rps.getState()
+        rps.nodes_.append(rps.node_)
+
+        viz.showAnimation(ox, oy, cx, cy, state.x, state.y, xref, target_ind, state)
+
+    csv_writer.saveTrajectoryAsCSV(rps.nodes_)
+    rospy.spin()
 
 def main5():
 
