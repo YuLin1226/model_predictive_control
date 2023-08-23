@@ -3,6 +3,18 @@ import tf
 from geometry_msgs.msg import Twist
 from gazebo_msgs.msg import ModelStates
 from state import State
+import math
+import numpy as np
+
+def angleRangeFilter(ang):
+
+    while ang > math.pi * 2:
+        ang = ang - math.pi * 2
+    while ang < -math.pi * 2:
+        ang = ang + math.pi * 2
+    if ang < 0:
+        ang = ang + math.pi * 2
+    return ang
 
 class RobotPoseSubscriber:
 
@@ -26,6 +38,7 @@ class RobotPoseSubscriber:
             )
         euler = tf.transformations.euler_from_quaternion(quaternion)
         yaw = euler[2]
+        yaw = angleRangeFilter(ang=yaw)
         self.node_ = State(x=x, y=y, yaw=yaw)
 
     def getState(self):
