@@ -10,6 +10,7 @@ from mpc_lib import MPC
 from viz import CarViz
 from trajectory_gen import TrajectoryGenerator
 from state import State
+import numpy as np
 
 # ================================== Class ==================================
 class Writer:
@@ -47,14 +48,24 @@ def solveAtan2Continuity(cyaw):
 def main():
 
     rospy.init_node("mpc_planner_node", anonymous=True)
-    cp = CommandPublisher(topic_name="/dual_wheel_steering_controller/cmd_vel")
+    cp = CommandPublisher(topic_name="/cmd_vel")
     rps = RobotPoseSubscriber(topic_name="/gazebo/model_states")
     viz = CarViz()
     mpc = MPC()
     tg = TrajectoryGenerator()
     csv_writer = Writer()
 
-    cx, cy, cyaw = tg.makeEightShapeTrajectory(size=10, n=241)
+    # MPC Parameters
+    mpc.ackermann_steer_inc_rate_ = np.deg2rad(30)
+    mpc.ackermann_speed_inc_rate_ = 0.2
+    mpc.ackermann_max_speed_ = 0.47
+    mpc.ackermann_max_steer_ = np.deg2rad(60)
+    mpc.R_  = np.diag([0.01, 0.01, 0.01, 0.01])
+    mpc.Rd_ = np.diag([0.01, 0.01, 0.01, 0.01]) # Unused.
+    mpc.Q_  = np.diag([1.0, 1.0, 0.1])
+    mpc.Qf_ = np.diag([1.0, 1.0, 0.1])
+
+    cx, cy, cyaw = tg.makeEightShapeTrajectory(size=10, n=481)
     cyaw = solveAtan2Continuity(cyaw)
 
     goal = [cx[-1], cy[-1]]
@@ -66,7 +77,7 @@ def main():
     while not rospy.is_shutdown():
             
         x0 = [state.x, state.y, state.yaw] 
-        xref, target_ind = mpc.getReferenceTrajectory(state, cx, cy, cyaw, 2, target_ind)
+        xref, target_ind = mpc.getReferenceTrajectory(state, cx, cy, cyaw, 5, target_ind)
         ovf, ovr, osf, osr, ox, oy, oyaw = mpc.iterativeLMPC(xref, x0, ovf, ovr, osf, osr, mode)
 
         if ovf is not None:
@@ -231,9 +242,14 @@ def main4():
 
 def main5():
 
-    print(__file__ + " start...")
-
+    rospy.init_node("mpc_planner_node", anonymous=True)
+    cp = CommandPublisher(topic_name="/dual_wheel_steering_controller/cmd_vel")
+    rps = RobotPoseSubscriber(topic_name="/gazebo/model_states")
+    viz = CarViz()
+    mpc = MPC()
     tg = TrajectoryGenerator()
+    csv_writer = Writer()
+
     ref = tg.retriveTrajectoryFromCSV('output.csv')
     cx, cy, cyaw, cmode = tg.interpolateReference2(ref, 3)
     idx_group = tg.splitTrajectoryWithMotionModes(cmode)
