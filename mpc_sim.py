@@ -444,9 +444,9 @@ def main2():
     print(__file__ + " start...")
 
     tg = TrajectoryGenerator()
-    ref = tg.retriveTrajectoryFromCSV('reference.csv')
-    cx, cy, cyaw = tg.interpolateReference(ref, 3)
-    cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
+    node_lists = tg.retriveTrajectoryFromCSV('g2_ackermann.csv')
+    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.interpolateTrajectory(node_lists)
+    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.compressTrajectory(cx, cy, cyaw, cmode, cvf, csf, cvr, csr)
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
     cx.pop(0)
@@ -461,9 +461,9 @@ def main3():
     print(__file__ + " start...")
 
     tg = TrajectoryGenerator()
-    ref = tg.retriveTrajectoryFromCSV('reference_crab.csv')
-    cx, cy, cyaw = tg.interpolateReference(ref, 3, 'crab')
-    cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
+    node_lists = tg.retriveTrajectoryFromCSV('g2_crab.csv')
+    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.interpolateTrajectory(node_lists)
+    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.compressTrajectory(cx, cy, cyaw, cmode, cvf, csf, cvr, csr)
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
     cx.pop(0)
@@ -478,9 +478,9 @@ def main4():
     print(__file__ + " start...")
 
     tg = TrajectoryGenerator()
-    ref = tg.retriveTrajectoryFromCSV('reference_diff.csv')
-    cx, cy, cyaw = tg.interpolateReference(ref, 2, 'differential')
-    cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
+    node_lists = tg.retriveTrajectoryFromCSV('g2_diff.csv')
+    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.interpolateTrajectory(node_lists)
+    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.compressTrajectory(cx, cy, cyaw, cmode, cvf, csf, cvr, csr)
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
     cx.pop(0)
@@ -488,7 +488,7 @@ def main4():
     cyaw.pop(0)
 
     mpc = MPC()
-    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'diff')
+    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'differential')
 
 def main5():
 
