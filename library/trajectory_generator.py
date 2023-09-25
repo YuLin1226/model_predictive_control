@@ -3,8 +3,8 @@
 import csv
 import numpy as np
 import math
-from polynomial import Polynomial
-from general_bicycle_model import GeneralBicycleModel
+from .polynomial import Polynomial
+from .general_bicycle_model import GeneralBicycleModel
 
 
 class TrajectoryGenerator:
