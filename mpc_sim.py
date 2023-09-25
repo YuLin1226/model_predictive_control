@@ -1,16 +1,13 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
-
-import matplotlib.pyplot as plt
 import cvxpy
 import math
 import numpy as np
 import sys
-import pathlib
-import csv
-sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
-import cubic_spline_planner
-
+from library.polynomial import Polynomial
+from library.visualization import CarViz
+from library.general_bicycle_model import GeneralBicycleModel
+from library.trajectory_generator import TrajectoryGenerator
 
 def smooth_yaw(yaw):
 
@@ -38,130 +35,6 @@ class State:
         self.vy = vy
         self.w = w
         
-class CarViz:
-
-    def __init__(self, car_size=[1.5, 0.6]) -> None:
-        
-        self.length_ = car_size[0]
-        self.width_ = car_size[1]
-
-    def plotCar(self, x, y, yaw, truckcolor="-k"): 
-    
-        outline = np.array([[-self.length_/2, self.length_/2, self.length_/2, -self.length_/2, -self.length_/2],
-                            [self.width_ / 2, self.width_ / 2, - self.width_ / 2, -self.width_ / 2, self.width_ / 2]])
-
-        Rot1 = np.array([[math.cos(yaw), math.sin(yaw)],
-                        [-math.sin(yaw), math.cos(yaw)]])
-
-        outline = (outline.T.dot(Rot1)).T
-        outline[0, :] += x
-        outline[1, :] += y
-
-        plt.plot(np.array(outline[0, :]).flatten(),
-                np.array(outline[1, :]).flatten(), truckcolor)
-        
-    def vizOn(self):
-        plt.show()
-
-    def plotTrajectory(self, cx, cy):
-        plt.plot(cx, cy, "k-")
-
-
-    def showAnimation(self, ox, oy, cx, cy, x, y, xref, target_ind, state):
-
-        # plt.cla()
-        # for stopping simulation with the esc key.
-        plt.gcf().canvas.mpl_connect('key_release_event', lambda event: [exit(0) if event.key == 'escape' else None])
-        if ox is not None:
-            plt.plot(ox, oy, "xr", label="MPC")
-        plt.plot(cx, cy, "-r", label="course")
-        plt.plot(x, y, "ob", label="trajectory")
-        plt.plot(xref[0, :], xref[1, :], "xk", label="xref")
-        plt.plot(cx[target_ind], cy[target_ind], "xg", label="target")
-        # self.plotCar(state.x, state.y, state.yaw)
-        plt.axis("equal")
-        plt.grid(True)
-        plt.pause(0.0001)
-    
-
-class GeneralBicycleModel:
-
-    def __init__(self, wheel_base=1, nx=3, nu=4) -> None:
-        self.wheel_base_ = wheel_base
-        self.nx_ = nx
-        self.nu_ = nu
-
-    def updateState(self, state, vx, vy, w, dt=0.2):
-        
-        state.x = state.x + vx * math.cos(state.yaw) * dt - vy * math.sin(state.yaw) * dt
-        state.y = state.y + vx * math.sin(state.yaw) * dt + vy * math.cos(state.yaw) * dt
-        state.yaw = state.yaw + w * dt
-        state.vx = vx
-        state.vy = vy
-        state.w = w
-        return state
-
-    def transformWheelCommandToRobotCommand(self, vf, vr, sf, sr):
-        """
-        Wheel Command: wheel speed & wheel steer
-        Robot Command: Vx, Vy, W
-        """
-        H = np.array([
-            [1, 0, 0],
-            [0, 1, self.wheel_base_/2],
-            [1, 0, 0],
-            [0, 1, -self.wheel_base_/2]
-        ])
-        km = np.linalg.inv((H.transpose() @ H)) @ H.transpose()
-        v1x = math.cos(sf) * vf
-        v1y = math.sin(sf) * vf
-        v2x = math.cos(sr) * vr
-        v2y = math.sin(sr) * vr
-        vo = np.array([
-            [v1x],
-            [v1y],
-            [v2x],
-            [v2y]
-        ])
-        vi = km @ vo
-        vx = float(vi[0])
-        vy = float(vi[1])
-        w = float(vi[2])
-        return vx, vy, w
-
-    def getRobotModelMatrice(self, theta, v_f, delta_f, v_r, delta_r, dt=0.2):
-        """
-        Robot Model: x(k+1) = A x(k) + B u(k) + C
-        """
-        # Define A
-        A = np.zeros((self.nx_, self.nx_))
-        A[0, 0] = 1.0
-        A[1, 1] = 1.0
-        A[2, 2] = 1.0
-        A[0, 2] = -0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.sin(theta) -0.5*dt*(v_f*math.sin(delta_f)+v_r*math.sin(delta_r))*math.cos(theta)
-        A[1, 2] = 0.5*dt*(v_f*math.cos(delta_f)+v_r*math.cos(delta_r))*math.cos(theta) -0.5*dt*(v_f*math.sin(delta_f)+v_r*math.sin(delta_r))*math.sin(theta)
-        # Define B
-        B = np.zeros((self.nx_, self.nu_))
-        B[0, 0] =  1 / 2 * dt * (math.cos(delta_f) * math.cos(theta) - math.sin(delta_f) * math.sin(theta))
-        B[0, 1] = -1 / 2 * dt * (math.sin(delta_f) * math.cos(theta) + math.cos(delta_f) * math.sin(theta)) * v_f
-        B[0, 2] =  1 / 2 * dt * (math.cos(delta_r) * math.cos(theta) - math.sin(delta_r) * math.sin(theta))
-        B[0, 3] = -1 / 2 * dt * (math.sin(delta_r) * math.cos(theta) + math.cos(delta_r) * math.sin(theta)) * v_r
-        B[1, 0] =  1 / 2 * dt * (math.cos(delta_f) * math.sin(theta) + math.sin(delta_f) * math.cos(theta))
-        B[1, 1] = -1 / 2 * dt * (math.sin(delta_f) * math.sin(theta) - math.cos(delta_f) * math.cos(theta)) * v_f
-        B[1, 2] =  1 / 2 * dt * (math.cos(delta_r) * math.sin(theta) + math.sin(delta_r) * math.cos(theta))
-        B[1, 3] = -1 / 2 * dt * (math.sin(delta_r) * math.cos(theta) - math.cos(delta_r) * math.sin(theta)) * v_r
-        B[2, 0] =  1 / self.wheel_base_ * dt * math.sin(delta_r)
-        B[2, 1] =  1 / self.wheel_base_ * dt * math.cos(delta_f) * v_f 
-        B[2, 2] = -1 / self.wheel_base_ * dt * math.sin(delta_r)
-        B[2, 3] = -1 / self.wheel_base_ * dt * math.cos(delta_r) * v_r
-        # Define C
-        C = np.zeros(self.nx_)
-        C[0] = 1 / 2 * dt * (v_f * math.cos(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.cos(delta_r) * math.sin(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.cos(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.cos(theta) * (delta_r + theta))
-        C[1] = 1 / 2 * dt * (-v_f * math.cos(delta_f) * math.cos(theta) * (delta_f + theta) - v_r * math.cos(delta_r) * math.cos(theta) * (delta_r + theta) + v_f * math.sin(delta_f) * math.sin(theta) * (delta_f + theta) + v_r * math.sin(delta_r) * math.sin(theta) * (delta_r + theta))
-        C[2] = 1 / self.wheel_base_ * dt * (-math.cos(delta_f) * delta_f * v_f + math.cos(delta_r) * delta_r * v_r)
-        
-        return A, B, C
-
 class MPC:
 
     def __init__(self, horizon=5, nx=3, nu=4, xy_tolerance=1.5, stop_speed=0.2, show_animation=True) -> None:
@@ -264,7 +137,6 @@ class MPC:
             t, x, y, yaw, vx, vy, w, state = self.doSimulation(lx, ly, lyaw, current_state, lmode)
             current_state = state
 
-    
     def predictMotion(self, x0, vf, vr, sf, sr, xref):
         
         xbar = xref * 0.0
@@ -552,155 +424,7 @@ class MPC:
         return False
 
     
-class TrajectoryGenerator:
 
-    def __init__(self) -> None:
-        pass
-
-    def retriveTrajectoryFromCSV(self, file_name):
-        node_lists = []
-        with open(file_name, newline='') as csvfile:
-            rows = csv.reader(csvfile)
-            skip_first = True
-            for row in rows:
-                if skip_first:
-                    skip_first = False
-                    continue
-                node = []
-                for i, element in enumerate(row):    
-                    if i == 11:
-                        node.append(element)
-                    else:
-                        node.append(float(element))
-                node_lists.append(node)
-        return node_lists
-
-    def interpolateReference(self, node_lists, interpolate_num=5, mode='ackermann'):
-
-        pts_x, pts_y, pts_yaw = [], [], []
-        if mode == 'ackermann' or mode == 'diff':
-            for i in range(len(node_lists) - 1):
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                if w == 0:
-                    continue
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    icr = [-vy / w, vx / w]
-                    yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
-                    x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
-                    y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-            return pts_x, pts_y, pts_yaw
-        
-        if mode == 'crab':
-            for i in range(len(node_lists) - 1):
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    yaw = from_node[2]
-                    x = from_node[0] + (to_node[0] - from_node[0]) / interpolate_num * i
-                    y = from_node[1] + (to_node[1] - from_node[1]) / interpolate_num * i
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-            return pts_x, pts_y, pts_yaw
-        
-    def interpolateReference2(self, node_lists, interpolate_num=5):
-
-        pts_x, pts_y, pts_yaw, pts_mode = [], [], [], []
-        for i in range(len(node_lists) - 1):
-            mode = node_lists[i+1][11]
-            if mode == 'ackermann' or mode == 'diff':
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                if w == 0:
-                    continue
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    icr = [-vy / w, vx / w]
-                    yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
-                    x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
-                    y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-                    pts_mode.append(mode)
-            
-            elif mode == 'crab':
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    yaw = from_node[2]
-                    x = from_node[0] + (to_node[0] - from_node[0]) / interpolate_num * i
-                    y = from_node[1] + (to_node[1] - from_node[1]) / interpolate_num * i
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-                    pts_mode.append(mode)
-
-        return pts_x, pts_y, pts_yaw, pts_mode
-
-    def removeRepeatedPoints(self, cx, cy, cyaw, epsilon=0.00001):
-
-        nx, ny, nyaw = [], [], []
-        for x, y, yaw in zip(cx, cy, cyaw):
-            if not nx:
-                nx.append(x)
-                ny.append(y)
-                nyaw.append(yaw)
-                continue
-            dx = x - nx[-1]
-            dy = y - ny[-1]
-            if (dx**2 + dy**2) < epsilon:
-                continue
-            nx.append(x)
-            ny.append(y)
-            nyaw.append(yaw)
-        return nx, ny, nyaw
-
-    def splitTrajectoryWithMotionModes(self, cmode):
-
-        trajectories_idx_group = []
-        from_idx, to_idx = None, None
-        current_mode = None
-        for i, mode in zip(range(len(cmode) - 1), cmode):
-            
-            if from_idx is None:
-                from_idx = i
-                current_mode = mode
-
-            if current_mode != cmode[i+1]:
-                to_idx = i
-                trajectories_idx_group.append([from_idx, to_idx])
-                from_idx, to_idx = None, None
-
-        return trajectories_idx_group
-
-    def makeEightShapeTrajectory(self, size=10, n=121):
-        x, y, yaw = [], [], []
-        for i in range(n):
-            ptx = 0.8 * math.sin(2 * math.pi / 60 * i) * size
-            pty = math.sin(1 * math.pi / 60 * i) * size
-            dx = 0.8 * math.cos(2 * math.pi / 60 * i) * 2 * math.pi / 60
-            dy = math.cos(1 * math.pi / 60 * i) * 1 * math.pi / 60
-            ptyaw = math.atan2(dy, dx)
-            x.append(ptx)
-            y.append(pty)
-            yaw.append(ptyaw)
-        return x ,y, yaw
     
 
 def main1():
