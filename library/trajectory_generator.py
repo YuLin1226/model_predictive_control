@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+# -*- coding: UTF-8 -*-
 import csv
 import numpy as np
 import math
@@ -47,11 +49,11 @@ class TrajectoryGenerator:
             rear_wheel_travel_poly_2 = Polynomial(node[20], node[21], node[22])
             rear_wheel_steer_poly_1 = Polynomial(node[23], node[24], node[25])
             rear_wheel_steer_poly_2 = Polynomial(node[26], node[27], node[28])
-            T = node[3] - node[i-1][3]
+            T = node[3] - node_lists[i-1][3]
             half_T = T / 2
             ts = np.linspace(0, half_T, num_interval) 
             dt = np.average(np.diff(ts))
-            x, y, yaw = node[i-1][0], node[i-1][1], node[i-1][2]
+            x, y, yaw = node_lists[i-1][0], node_lists[i-1][1], node_lists[i-1][2]
             for t in ts:
                 x, y, yaw = self.computeNextNodePose(x, y, yaw, front_wheel_travel_poly_1, rear_wheel_travel_poly_1, front_wheel_steer_poly_1, rear_wheel_steer_poly_1, t, dt)
                 pts_x.append(x)
@@ -100,3 +102,11 @@ class TrajectoryGenerator:
                 from_idx, to_idx = None, None
 
         return trajectories_idx_group
+
+def test1():
+    tg = TrajectoryGenerator()
+    node_lists = tg.retriveTrajectoryFromCSV("g2_cm_path.csv")
+    X, Y, YAW, MODE = tg.interpolateTrajectory(node_lists)
+
+if __name__ == '__main__':
+    test1()
