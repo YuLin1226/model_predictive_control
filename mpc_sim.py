@@ -423,22 +423,6 @@ class MPC:
             return True
         return False
 
-def main1():
-
-    print(__file__ + " start...")
-
-    
-    tg = TrajectoryGenerator()
-    cx, cy, cyaw = tg.makeEightShapeTrajectory()
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
-
-    cx.pop(0)
-    cy.pop(0)
-    cyaw.pop(0)
-
-    mpc = MPC()
-    t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state)
-
 def main2():
 
     print(__file__ + " start...")
@@ -491,35 +475,26 @@ def main4():
     t, x, y, yaw, vx, vy, w, state = mpc.doSimulation(cx, cy, cyaw, initial_state, 'differential')
 
 def main5():
-
-    print(__file__ + " start...")
-
-    tg = TrajectoryGenerator()
-    ref = tg.retriveTrajectoryFromCSV('output.csv')
-    cx, cy, cyaw, cmode = tg.interpolateReference2(ref, 3)
-    idx_group = tg.splitTrajectoryWithMotionModes(cmode)
-    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
-
-    mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulationWithAllMotionModes(idx_group, cx, cy, cyaw, cmode, initial_state)
-
-def main6():
     print(__file__ + " start...")
     tg = TrajectoryGenerator()
-    node_lists = tg.retriveTrajectoryFromCSV('g2_cm_path.csv')
+    node_lists = tg.retriveTrajectoryFromCSV('g2_cmd_path.csv')
     cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.interpolateTrajectory(node_lists)
-    
+    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.compressTrajectory(cx, cy, cyaw, cmode, cvf, csf, cvr, csr)
+    cx.pop(0)
+    cy.pop(0)
+    cyaw.pop(0)
+    cmode.pop(0)
+
     idx_group = tg.splitTrajectoryWithMotionModes(cmode)
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
     mpc = MPC()
-    t, x, y, yaw, vx, w = mpc.doSimulationWithAllMotionModes(idx_group, cx, cy, cyaw, cmode, initial_state)
 
+    t, x, y, yaw, vx, w = mpc.doSimulationWithAllMotionModes(idx_group, cx, cy, cyaw, cmode, initial_state)
 
 if __name__ == '__main__':
-    # main1() # 8 shaped / Ackermann Mode
+    
     # main2() # RRT / Ackermann Mode
     # main3() # RRT / Crab Mode
-    # main4() # RRT / Diff Mode
+    main4() # RRT / Diff Mode
     # main5() # RRT / All Modes
-    main6()
