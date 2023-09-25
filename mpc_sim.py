@@ -423,10 +423,6 @@ class MPC:
             return True
         return False
 
-    
-
-    
-
 def main1():
 
     print(__file__ + " start...")
@@ -507,10 +503,23 @@ def main5():
     mpc = MPC()
     t, x, y, yaw, vx, w = mpc.doSimulationWithAllMotionModes(idx_group, cx, cy, cyaw, cmode, initial_state)
 
+def main6():
+    print(__file__ + " start...")
+    tg = TrajectoryGenerator()
+    node_lists = tg.retriveTrajectoryFromCSV('g2_cm_path.csv')
+    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.interpolateTrajectory(node_lists)
+    
+    idx_group = tg.splitTrajectoryWithMotionModes(cmode)
+    initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
+
+    mpc = MPC()
+    t, x, y, yaw, vx, w = mpc.doSimulationWithAllMotionModes(idx_group, cx, cy, cyaw, cmode, initial_state)
+
 
 if __name__ == '__main__':
     # main1() # 8 shaped / Ackermann Mode
     # main2() # RRT / Ackermann Mode
     # main3() # RRT / Crab Mode
     # main4() # RRT / Diff Mode
-    main5()
+    # main5() # RRT / All Modes
+    main6()
