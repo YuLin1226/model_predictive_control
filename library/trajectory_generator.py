@@ -33,6 +33,7 @@ class TrajectoryGenerator:
 
     def interpolateTrajectory(self, node_lists, num_interval=100):
         pts_x, pts_y, pts_yaw, pts_mode = [], [], [], []
+        pts_vf, pts_vr, pts_sf, pts_sr = [], [], [], []
         # each element in node_lists has 2 polynomial sets.
         for i, node in enumerate(node_lists):
             if i == 0:
@@ -55,18 +56,26 @@ class TrajectoryGenerator:
             dt = np.average(np.diff(ts))
             x, y, yaw = node_lists[i-1][0], node_lists[i-1][1], node_lists[i-1][2]
             for t in ts:
-                x, y, yaw = self.computeNextNodePose(x, y, yaw, front_wheel_travel_poly_1, rear_wheel_travel_poly_1, front_wheel_steer_poly_1, rear_wheel_steer_poly_1, t, dt)
+                x, y, yaw, vf, sf, vr, sr = self.computeNextNodePose(x, y, yaw, front_wheel_travel_poly_1, rear_wheel_travel_poly_1, front_wheel_steer_poly_1, rear_wheel_steer_poly_1, t, dt)
                 pts_x.append(x)
                 pts_y.append(y)
                 pts_yaw.append(yaw)
                 pts_mode.append(node[4])
+                pts_vf.append(vf)
+                pts_sf.append(sf)
+                pts_vr.append(vr)
+                pts_sr.append(sr)
             for t in ts:
-                x, y, yaw = self.computeNextNodePose(x, y, yaw, front_wheel_travel_poly_2, rear_wheel_travel_poly_2, front_wheel_steer_poly_2, rear_wheel_steer_poly_2, t, dt)
+                x, y, yaw, vf, sf, vr, sr = self.computeNextNodePose(x, y, yaw, front_wheel_travel_poly_2, rear_wheel_travel_poly_2, front_wheel_steer_poly_2, rear_wheel_steer_poly_2, t, dt)
                 pts_x.append(x)
                 pts_y.append(y)
                 pts_yaw.append(yaw)
                 pts_mode.append(node[4])
-        return pts_x, pts_y, pts_yaw, pts_mode
+                pts_vf.append(vf)
+                pts_sf.append(sf)
+                pts_vr.append(vr)
+                pts_sr.append(sr)
+        return pts_x, pts_y, pts_yaw, pts_mode, pts_vf, pts_vr, pts_sf, pts_sr
 
     def computeNextNodePose(self, last_x:float, last_y:float, last_yaw:float, front_wheel_travel_poly:Polynomial, rear_wheel_travel_poly:Polynomial, front_wheel_steer_poly:Polynomial, rear_wheel_steer_poly:Polynomial, t:float, dt:float):
         
@@ -83,7 +92,7 @@ class TrajectoryGenerator:
         x = last_x + (vx * math.cos(last_yaw) - vy * math.sin(last_yaw)) * dt
         y = last_y + (vx * math.sin(last_yaw) + vy * math.cos(last_yaw)) * dt
         yaw = last_yaw + w * dt
-        return x, y, yaw
+        return x, y, yaw, front_speed, front_steer, rear_speed, rear_steer
 
     def splitTrajectoryWithMotionModes(self, cmode):
 
@@ -106,7 +115,7 @@ class TrajectoryGenerator:
 def test1():
     tg = TrajectoryGenerator()
     node_lists = tg.retriveTrajectoryFromCSV("g2_cm_path.csv")
-    X, Y, YAW, MODE = tg.interpolateTrajectory(node_lists)
+    X, Y, YAW, MODE, VF, SF, VR, SR = tg.interpolateTrajectory(node_lists)
 
 if __name__ == '__main__':
     test1()
