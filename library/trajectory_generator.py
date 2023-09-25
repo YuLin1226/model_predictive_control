@@ -1,11 +1,14 @@
 import csv
 import numpy as np
 import math
+from polynomial import Polynomial
+from general_bicycle_model import GeneralBicycleModel
+
 
 class TrajectoryGenerator:
 
     def __init__(self) -> None:
-        pass
+        self.gbm_ = GeneralBicycleModel(wheel_base=1)
 
     def retriveTrajectoryFromCSV(self, file_name):
         node_lists = []
@@ -26,101 +29,59 @@ class TrajectoryGenerator:
                 node_lists.append(node)
         return node_lists
 
-    def interpolateReference(self, node_lists, interpolate_num=5, mode='ackermann'):
-
-        pts_x, pts_y, pts_yaw = [], [], []
-        if mode == 'ackermann' or mode == 'diff':
-            for i in range(len(node_lists) - 1):
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                if w == 0:
-                    continue
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    icr = [-vy / w, vx / w]
-                    yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
-                    x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
-                    y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-            return pts_x, pts_y, pts_yaw
-        
-        if mode == 'crab':
-            for i in range(len(node_lists) - 1):
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    yaw = from_node[2]
-                    x = from_node[0] + (to_node[0] - from_node[0]) / interpolate_num * i
-                    y = from_node[1] + (to_node[1] - from_node[1]) / interpolate_num * i
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-            return pts_x, pts_y, pts_yaw
-        
-    def interpolateReference2(self, node_lists, interpolate_num=5):
-
+    def interpolateTrajectory(self, node_lists, num_interval=100):
         pts_x, pts_y, pts_yaw, pts_mode = [], [], [], []
-        for i in range(len(node_lists) - 1):
-            mode = node_lists[i+1][11]
-            if mode == 'ackermann' or mode == 'diff':
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                if w == 0:
-                    continue
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    icr = [-vy / w, vx / w]
-                    yaw = from_node[2] + (to_node[2] - from_node[2]) / interpolate_num * i
-                    x = (math.cos(from_node[2]) - math.cos(yaw)) * icr[0] - (math.sin(from_node[2]) - math.sin(yaw)) * icr[1] + from_node[0]
-                    y = (math.sin(from_node[2]) - math.sin(yaw)) * icr[0] + (math.cos(from_node[2]) - math.cos(yaw)) * icr[1] + from_node[1]
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-                    pts_mode.append(mode)
-            
-            elif mode == 'crab':
-                vx = node_lists[i+1][3]
-                vy = node_lists[i+1][4]
-                w  = node_lists[i+1][5]
-                from_node = node_lists[i]
-                to_node   = node_lists[i+1]
-                for i in range(interpolate_num):
-                    yaw = from_node[2]
-                    x = from_node[0] + (to_node[0] - from_node[0]) / interpolate_num * i
-                    y = from_node[1] + (to_node[1] - from_node[1]) / interpolate_num * i
-                    pts_x.append(x)
-                    pts_y.append(y)
-                    pts_yaw.append(yaw)
-                    pts_mode.append(mode)
-
+        # each element in node_lists has 2 polynomial sets.
+        for i, node in enumerate(node_lists):
+            if i == 0:
+                pts_x.append(node[0])
+                pts_y.append(node[1])
+                pts_yaw.append(node[2])
+                pts_mode.append(node[4])
+                continue
+            front_wheel_travel_poly_1 = Polynomial(node[5], node[6], node[7])
+            front_wheel_travel_poly_2 = Polynomial(node[8], node[9], node[10])
+            front_wheel_steer_poly_1 = Polynomial(node[11], node[12], node[13])
+            front_wheel_steer_poly_2 = Polynomial(node[14], node[15], node[16])
+            rear_wheel_travel_poly_1 = Polynomial(node[17], node[18], node[19])
+            rear_wheel_travel_poly_2 = Polynomial(node[20], node[21], node[22])
+            rear_wheel_steer_poly_1 = Polynomial(node[23], node[24], node[25])
+            rear_wheel_steer_poly_2 = Polynomial(node[26], node[27], node[28])
+            T = node[3] - node[i-1][3]
+            half_T = T / 2
+            ts = np.linspace(0, half_T, num_interval) 
+            dt = np.average(np.diff(ts))
+            x, y, yaw = node[i-1][0], node[i-1][1], node[i-1][2]
+            for t in ts:
+                x, y, yaw = self.computeNextNodePose(x, y, yaw, front_wheel_travel_poly_1, rear_wheel_travel_poly_1, front_wheel_steer_poly_1, rear_wheel_steer_poly_1, t, dt)
+                pts_x.append(x)
+                pts_y.append(y)
+                pts_yaw.append(yaw)
+                pts_mode.append(node[4])
+            for t in ts:
+                x, y, yaw = self.computeNextNodePose(x, y, yaw, front_wheel_travel_poly_2, rear_wheel_travel_poly_2, front_wheel_steer_poly_2, rear_wheel_steer_poly_2, t, dt)
+                pts_x.append(x)
+                pts_y.append(y)
+                pts_yaw.append(yaw)
+                pts_mode.append(node[4])
         return pts_x, pts_y, pts_yaw, pts_mode
 
-    def removeRepeatedPoints(self, cx, cy, cyaw, epsilon=0.00001):
-
-        nx, ny, nyaw = [], [], []
-        for x, y, yaw in zip(cx, cy, cyaw):
-            if not nx:
-                nx.append(x)
-                ny.append(y)
-                nyaw.append(yaw)
-                continue
-            dx = x - nx[-1]
-            dy = y - ny[-1]
-            if (dx**2 + dy**2) < epsilon:
-                continue
-            nx.append(x)
-            ny.append(y)
-            nyaw.append(yaw)
-        return nx, ny, nyaw
+    def computeNextNodePose(self, last_x:float, last_y:float, last_yaw:float, front_wheel_travel_poly:Polynomial, rear_wheel_travel_poly:Polynomial, front_wheel_steer_poly:Polynomial, rear_wheel_steer_poly:Polynomial, t:float, dt:float):
+        
+        front_speed = front_wheel_travel_poly.a_ * t**2 + front_wheel_travel_poly.b_ * t + front_wheel_travel_poly.c_
+        front_steer = front_wheel_steer_poly.a_ * t**2 + front_wheel_steer_poly.b_ * t + front_wheel_steer_poly.c_
+        rear_speed = rear_wheel_travel_poly.a_ * t**2 + rear_wheel_travel_poly.b_ * t + rear_wheel_travel_poly.c_
+        rear_steer = rear_wheel_steer_poly.a_ * t**2 + rear_wheel_steer_poly.b_ * t + rear_wheel_steer_poly.c_
+        vx, vy, w = self.gbm_.transformWheelCommandToRobotCommand(
+            vf=front_speed,
+            sf=front_steer,
+            vr=rear_speed,
+            sr=rear_steer
+        )
+        x = last_x + (vx * math.cos(last_yaw) - vy * math.sin(last_yaw)) * dt
+        y = last_y + (vx * math.sin(last_yaw) + vy * math.cos(last_yaw)) * dt
+        yaw = last_yaw + w * dt
+        return x, y, yaw
 
     def splitTrajectoryWithMotionModes(self, cmode):
 
@@ -139,16 +100,3 @@ class TrajectoryGenerator:
                 from_idx, to_idx = None, None
 
         return trajectories_idx_group
-
-    def makeEightShapeTrajectory(self, size=10, n=121):
-        x, y, yaw = [], [], []
-        for i in range(n):
-            ptx = 0.8 * math.sin(2 * math.pi / 60 * i) * size
-            pty = math.sin(1 * math.pi / 60 * i) * size
-            dx = 0.8 * math.cos(2 * math.pi / 60 * i) * 2 * math.pi / 60
-            dy = math.cos(1 * math.pi / 60 * i) * 1 * math.pi / 60
-            ptyaw = math.atan2(dy, dx)
-            x.append(ptx)
-            y.append(pty)
-            yaw.append(ptyaw)
-        return x ,y, yaw
