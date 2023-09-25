@@ -112,6 +112,17 @@ class TrajectoryGenerator:
 
         return trajectories_idx_group
 
+    def compressTrajectory(self, pts_x, pts_y, pts_yaw, pts_mode, pts_vf, pts_vr, pts_sf, pts_sr, step=5):
+        pts_x = pts_x[::step]
+        pts_y = pts_y[::step]
+        pts_yaw = pts_yaw[::step]
+        pts_mode = pts_mode[::step]
+        pts_vf = pts_vf[::step]
+        pts_vr = pts_vr[::step]
+        pts_sf = pts_sf[::step]
+        pts_sr = pts_sr[::step]
+        return pts_x, pts_y, pts_yaw, pts_mode, pts_vf, pts_vr, pts_sf, pts_sr
+
 def test1():
     tg = TrajectoryGenerator()
     node_lists = tg.retriveTrajectoryFromCSV("g2_cm_path.csv")
