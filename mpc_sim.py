@@ -170,14 +170,14 @@ class MPC:
                 uref[1, i] = osf[i]
                 uref[3, i] = osr[i]
 
-                if mode == 'ackermann':
+                if mode == 'ackermann' or mode == 'ackermann/crab':
                     ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Ackermann(xref, xbar, x0, uref)
-                elif mode == 'diff':
+                elif mode == 'differential' or mode == 'differential/crab':
                     ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Differential(xref, xbar, x0, uref)
-                elif mode == 'crab':
+                elif mode == 'crab' or mode == 'crab/differential':
                     ovf, ovr, osf, osr, ox, oy, oyaw = self.doLMPC_Crab(xref, xbar, x0, uref)
                 else:
-                    print("Mode not defined. ")
+                    print("Mode " + mode + " not defined. ")
             
         return ovf, ovr, osf, osr, ox, oy, oyaw
 
@@ -479,7 +479,7 @@ def main4():
 
     tg = TrajectoryGenerator()
     ref = tg.retriveTrajectoryFromCSV('reference_diff.csv')
-    cx, cy, cyaw = tg.interpolateReference(ref, 2, 'diff')
+    cx, cy, cyaw = tg.interpolateReference(ref, 2, 'differential')
     cx, cy, cyaw = tg.removeRepeatedPoints(cx, cy, cyaw)
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
