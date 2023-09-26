@@ -122,6 +122,33 @@ class TrajectoryGenerator:
         pts_sf = pts_sf[::step]
         pts_sr = pts_sr[::step]
         return pts_x, pts_y, pts_yaw, pts_mode, pts_vf, pts_vr, pts_sf, pts_sr
+    
+    def makeEquivalentDistanceBetweenPoints(self, pts_x, pts_y, pts_yaw, pts_mode, pts_vf, pts_vr, pts_sf, pts_sr, points_dist=0.1):
+        new_pts_x, new_pts_y, new_pts_yaw, new_pts_mode, new_pts_vf, new_pts_vr, new_pts_sf, new_pts_sr = [], [], [], [], [], [], [], []
+        for x, y, yaw, mode, vf, sf, vr, sr, i in zip(pts_x, pts_y, pts_yaw, pts_mode, pts_vf, pts_vr, pts_sf, pts_sr, range(len(pts_x))):
+            if i == 0:
+                new_pts_x.append(x)
+                new_pts_y.append(y)
+                new_pts_yaw.append(yaw)
+                new_pts_mode.append(mode)
+                new_pts_vf.append(vf)
+                new_pts_sf.append(sf)
+                new_pts_vr.append(vr)
+                new_pts_sr.append(sr)
+                continue
+
+            dist = (x - new_pts_x[-1])**2 + (y - new_pts_y[-1])**2
+            if dist >= points_dist:
+                new_pts_x.append(x)
+                new_pts_y.append(y)
+                new_pts_yaw.append(yaw)
+                new_pts_mode.append(mode)
+                new_pts_vf.append(vf)
+                new_pts_sf.append(sf)
+                new_pts_vr.append(vr)
+                new_pts_sr.append(sr)
+
+        return new_pts_x, new_pts_y, new_pts_yaw, new_pts_mode, new_pts_vf, new_pts_vr, new_pts_sf, new_pts_sr
 
 def test1():
     tg = TrajectoryGenerator()
