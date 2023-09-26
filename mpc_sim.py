@@ -430,7 +430,8 @@ def main2():
     tg = TrajectoryGenerator()
     node_lists = tg.retriveTrajectoryFromCSV('g2_ackermann.csv')
     cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.interpolateTrajectory(node_lists)
-    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.compressTrajectory(cx, cy, cyaw, cmode, cvf, csf, cvr, csr)
+    cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.makeEquivalentDistanceBetweenPoints(cx, cy, cyaw, cmode, cvf, csf, cvr, csr, 0.05)
+    # cx, cy, cyaw, cmode, cvf, csf, cvr, csr = tg.compressTrajectory(cx, cy, cyaw, cmode, cvf, csf, cvr, csr, 15)
     initial_state = State(x=cx[0], y=cy[0], yaw=cyaw[0])
 
     cx.pop(0)
